@@ -320,6 +320,13 @@
       gap: 8px;
     }
 
+    .field-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
     .field-wide {
       grid-column: span 2;
     }
@@ -343,6 +350,23 @@
     .field input:focus {
       outline: 2px solid rgba(47, 158, 68, 0.2);
       border-color: #2f9e44;
+    }
+
+    .inline-action {
+      border: none;
+      background: transparent;
+      color: var(--accent);
+      font-size: 0.92rem;
+      font-weight: 800;
+      padding: 0;
+      cursor: pointer;
+      box-shadow: none;
+    }
+
+    .inline-action:hover {
+      transform: none;
+      box-shadow: none;
+      opacity: 0.8;
     }
 
     .btn-connect {
@@ -382,6 +406,28 @@
       margin-top: 16px;
       font-size: 0.95rem;
       color: var(--text-soft);
+    }
+
+    .login-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .summary-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: #eef7ea;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .summary-pill strong {
+      color: var(--text-main);
     }
 
     .timestamp {
@@ -532,6 +578,10 @@
 
       <article class="card settings-card">
         <h2 class="card-title">HiveMQ 연결 정보</h2>
+        <div class="login-summary">
+          <div class="summary-pill">현재 계정 <strong id="activeUsernameLabel">zionkoo3</strong></div>
+          <div class="summary-pill">저장 상태 <strong id="savedLoginLabel">미저장</strong></div>
+        </div>
         <div class="form-grid">
           <div class="field">
             <label for="hostInput">Broker Host</label>
@@ -550,7 +600,10 @@
             <input id="usernameInput" type="text" placeholder="zionkoo" />
           </div>
           <div class="field field-wide">
-            <label for="passwordInput">Password</label>
+            <div class="field-head">
+              <label for="passwordInput">Password</label>
+              <button class="inline-action" id="togglePasswordVisibilityBtn" type="button">비밀번호 보기</button>
+            </div>
             <input id="passwordInput" type="password" placeholder="HiveMQ 비밀번호를 입력하세요" />
           </div>
         </div>
@@ -593,11 +646,11 @@
       clientId : 브라우저에서 접속할 MQTT 클라이언트 ID
     */
     const defaultMqttConfig = {
-      host: "localhost",
-      port: 9001,
+      host: "b8009d3da4e241a9a4187c667e7fcdf3.s1.eu.hivemq.cloud",
+      port: 8884,
       path: "/mqtt",
-      useSSL: false,
-      username: "",
+      useSSL: true,
+      username: "zionkoo3",
       clientId: "smartfarm-dashboard-" + Math.random().toString(16).slice(2, 10)
     };
 
@@ -667,9 +720,12 @@
     const pathInput = document.getElementById("pathInput");
     const usernameInput = document.getElementById("usernameInput");
     const passwordInput = document.getElementById("passwordInput");
+    const togglePasswordVisibilityBtn = document.getElementById("togglePasswordVisibilityBtn");
     const connectBtn = document.getElementById("connectBtn");
     const clearSavedLoginBtn = document.getElementById("clearSavedLoginBtn");
     const rememberLoginCheckbox = document.getElementById("rememberLoginCheckbox");
+    const activeUsernameLabel = document.getElementById("activeUsernameLabel");
+    const savedLoginLabel = document.getElementById("savedLoginLabel");
     const STORAGE_KEY = "smartfarm-dashboard-login";
     const STALE_WARNING_MS = 30000;
     const STALE_DELAY_MS = 90000;
@@ -719,6 +775,16 @@
       }
     }
 
+    function updateLoginSummary(statusText) {
+      activeUsernameLabel.textContent = usernameInput.value.trim() || "미입력";
+
+      if (statusText) {
+        savedLoginLabel.textContent = statusText;
+      } else {
+        savedLoginLabel.textContent = rememberLoginCheckbox.checked ? "저장 예정" : "미저장";
+      }
+    }
+
     const savedLogin = loadSavedLogin();
 
     /*
@@ -731,6 +797,7 @@
     usernameInput.value = savedLogin?.username || mqttConfig.username;
     passwordInput.value = savedLogin?.password || "";
     rememberLoginCheckbox.checked = Boolean(savedLogin);
+    updateLoginSummary(savedLogin ? "저장됨" : "미저장");
 
     /*
       브로커 주소 표시용 문자열을 만들어 상단에 보여줍니다.
@@ -1100,8 +1167,10 @@
 
       if (rememberLoginCheckbox.checked) {
         saveLoginToBrowser();
+        updateLoginSummary("저장됨");
       } else {
         clearSavedLogin();
+        updateLoginSummary("미저장");
       }
 
       /*
@@ -1191,6 +1260,15 @@
     }
 
     /*
+      첫 로딩 자동 연결은 비밀번호가 이미 준비된 경우에만 실행합니다.
+      file:// 로 직접 열었을 때는 GitHub Pages에 저장된 비밀번호가 없으므로
+      사용자가 비밀번호를 넣은 뒤 연결하는 흐름이 더 자연스럽습니다.
+    */
+    function shouldAutoConnectOnLoad() {
+      return Boolean(passwordInput.value);
+    }
+
+    /*
       4. 버튼 클릭 시 pump 토픽으로 ON / OFF publish
     */
     function publishPumpState(state) {
@@ -1237,7 +1315,22 @@
       clearSavedLogin();
       rememberLoginCheckbox.checked = false;
       passwordInput.value = "";
+      updateLoginSummary("미저장");
       setConnectionState("Saved Login Cleared");
+    });
+
+    togglePasswordVisibilityBtn.addEventListener("click", function () {
+      const isPasswordHidden = passwordInput.type === "password";
+      passwordInput.type = isPasswordHidden ? "text" : "password";
+      togglePasswordVisibilityBtn.textContent = isPasswordHidden ? "비밀번호 숨기기" : "비밀번호 보기";
+    });
+
+    usernameInput.addEventListener("input", function () {
+      updateLoginSummary();
+    });
+
+    rememberLoginCheckbox.addEventListener("change", function () {
+      updateLoginSummary();
     });
 
     /*
@@ -1257,7 +1350,11 @@
       updateFreshnessUI("ec");
       updateFreshnessUI("ph");
     }, 5000);
-    connectMQTT();
+    if (shouldAutoConnectOnLoad()) {
+      connectMQTT();
+    } else {
+      setConnectionState("비밀번호 입력 후 연결");
+    }
   </script>
 </body>
 </html>
