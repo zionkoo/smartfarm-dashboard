@@ -282,7 +282,7 @@
       <h1>Smart Farm Dashboard</h1>
       <p>
         MQTT WebSocket으로 들어오는 스마트팜 센서 데이터를 실시간으로 보여주는 대시보드입니다.
-        토양 수분, 건조/정상 상태, 펌프 상태, 최근 20개 이상의 데이터 흐름을 한눈에 확인할 수 있습니다.
+        토양 수분, 건조/정상 상태, 펌프 상태, LED 광량, EC, pH, 최근 20개 이상의 데이터 흐름을 한눈에 확인할 수 있습니다.
       </p>
 
       <div class="connection">
@@ -312,6 +312,24 @@
           <button class="btn-off" id="pumpOffBtn" type="button">Pump OFF</button>
         </div>
         <p class="meta">토픽: <code>farm/pump</code></p>
+      </article>
+
+      <article class="card">
+        <h2 class="card-title">LED 광량</h2>
+        <p class="big-value" id="ledValue">--</p>
+        <p class="meta">토픽: <code>farm/led</code></p>
+      </article>
+
+      <article class="card">
+        <h2 class="card-title">EC 농도</h2>
+        <p class="big-value" id="ecValue">--</p>
+        <p class="meta">토픽: <code>farm/ec</code></p>
+      </article>
+
+      <article class="card">
+        <h2 class="card-title">pH 농도</h2>
+        <p class="big-value" id="phValue">--</p>
+        <p class="meta">토픽: <code>farm/ph</code></p>
       </article>
 
       <article class="card card-wide">
@@ -409,7 +427,10 @@
     */
     const topics = {
       soil: "farm/soil",
-      pump: "farm/pump"
+      pump: "farm/pump",
+      led: "farm/led",
+      ec: "farm/ec",
+      ph: "farm/ph"
     };
 
     /*
@@ -428,6 +449,9 @@
     const soilValue = document.getElementById("soilValue");
     const soilStatus = document.getElementById("soilStatus");
     const pumpState = document.getElementById("pumpState");
+    const ledValue = document.getElementById("ledValue");
+    const ecValue = document.getElementById("ecValue");
+    const phValue = document.getElementById("phValue");
     const pumpOnBtn = document.getElementById("pumpOnBtn");
     const pumpOffBtn = document.getElementById("pumpOffBtn");
     const hostInput = document.getElementById("hostInput");
@@ -557,6 +581,22 @@
     }
 
     /*
+      LED 광량, EC, pH 값도 숫자로 받아 화면에 표시합니다.
+      숫자가 아니어도 문자열 그대로 표시할 수 있게 단순화했습니다.
+    */
+    function updateLedUI(value) {
+      ledValue.textContent = value;
+    }
+
+    function updateEcUI(value) {
+      ecValue.textContent = value;
+    }
+
+    function updatePhUI(value) {
+      phValue.textContent = value;
+    }
+
+    /*
       MQTT 연결 상태 텍스트를 바꾸는 함수입니다.
     */
     function setConnectionState(text) {
@@ -620,6 +660,24 @@
       client.subscribe(topics.pump, function (error) {
         if (error) {
           console.error("pump topic subscribe failed:", error);
+        }
+      });
+
+      client.subscribe(topics.led, function (error) {
+        if (error) {
+          console.error("led topic subscribe failed:", error);
+        }
+      });
+
+      client.subscribe(topics.ec, function (error) {
+        if (error) {
+          console.error("ec topic subscribe failed:", error);
+        }
+      });
+
+      client.subscribe(topics.ph, function (error) {
+        if (error) {
+          console.error("ph topic subscribe failed:", error);
         }
       });
     }
@@ -701,6 +759,18 @@
 
         if (topic === topics.pump) {
           updatePumpUI(message);
+        }
+
+        if (topic === topics.led) {
+          updateLedUI(message);
+        }
+
+        if (topic === topics.ec) {
+          updateEcUI(message);
+        }
+
+        if (topic === topics.ph) {
+          updatePhUI(message);
         }
       });
 
