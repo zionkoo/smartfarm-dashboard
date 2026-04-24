@@ -1,0 +1,19 @@
+# -------------------------------
+# Mosquitto example for public WSS access
+# -------------------------------
+
+allow_anonymous true
+persistence true
+
+# Internal MQTT clients can use this listener.
+listener 1883
+protocol mqtt
+
+# Browser dashboard connects here with wss://
+listener 8084
+protocol websockets
+
+# Replace these certificate paths with your real files.
+cafile /etc/letsencrypt/live/mqtt.example.com/chain.pem
+certfile /etc/letsencrypt/live/mqtt.example.com/fullchain.pem
+keyfile /etc/letsencrypt/live/mqtt.example.com/privkey.pem

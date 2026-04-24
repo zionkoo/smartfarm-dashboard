@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Farm MQTT Dashboard</title>
+
+  <!--
+    Chart.js: 실시간 토양 수분 그래프를 그리기 위한 라이브러리
+    mqtt.js: 브라우저에서 MQTT over WebSocket 연결을 하기 위한 라이브러리
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <style>
+    :root {
+      --bg-start: #6fbf73;
+      --bg-end: #f4d35e;
+      --card-bg: rgba(255, 255, 255, 0.92);
+      --text-main: #173b2d;
+      --text-soft: #4e665a;
+      --dry: #d64545;
+      --wet: #2f9e44;
+      --accent: #2d6a4f;
+      --accent-soft: #dff3e4;
+      --shadow: 0 18px 45px rgba(23, 59, 45, 0.15);
+      --radius: 20px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+      color: var(--text-main);
+      background:
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.28), transparent 30%),
+        linear-gradient(135deg, var(--bg-start), var(--bg-end));
+      min-height: 100vh;
+    }
+
+    .dashboard {
+      width: min(1100px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 36px;
+    }
+
+    .hero {
+      margin-bottom: 20px;
+      padding: 26px;
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(10px);
+      color: #ffffff;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(1.9rem, 4vw, 3rem);
+    }
+
+    .hero p {
+      margin: 0;
+      line-height: 1.6;
+      max-width: 720px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 18px;
+    }
+
+    .card {
+      grid-column: span 4;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-wide {
+      grid-column: span 12;
+    }
+
+    .card-title {
+      margin: 0 0 12px;
+      font-size: 1rem;
+      color: var(--text-soft);
+    }
+
+    .big-value {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 700;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 1rem;
+      color: white;
+    }
+
+    .dry {
+      background: var(--dry);
+    }
+
+    .wet {
+      background: var(--wet);
+    }
+
+    .pump-state {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 12px 16px;
+      border-radius: 14px;
+      background: var(--accent-soft);
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    .connection {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-top: 16px;
+      color: #f8fff9;
+    }
+
+    .connection-pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    button {
+      border: none;
+      border-radius: 14px;
+      padding: 13px 20px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-on {
+      background: #2f9e44;
+      color: white;
+    }
+
+    .btn-off {
+      background: #d64545;
+      color: white;
+    }
+
+    .config-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--text-soft);
+      line-height: 1.7;
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 340px;
+    }
+
+    .meta {
+      margin-top: 16px;
+      font-size: 0.95rem;
+      color: var(--text-soft);
+    }
+
+    @media (max-width: 900px) {
+      .card {
+        grid-column: span 6;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .dashboard {
+        width: min(100% - 20px, 1100px);
+        padding-top: 18px;
+      }
+
+      .hero,
+      .card {
+        padding: 18px;
+      }
+
+      .card {
+        grid-column: span 12;
+      }
+
+      .chart-wrap {
+        height: 280px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="dashboard">
+    <section class="hero">
+      <h1>Smart Farm Dashboard</h1>
+      <p>
+        MQTT WebSocket으로 들어오는 스마트팜 센서 데이터를 실시간으로 보여주는 대시보드입니다.
+        토양 수분, 건조/정상 상태, 펌프 상태, 최근 20개 이상의 데이터 흐름을 한눈에 확인할 수 있습니다.
+      </p>
+
+      <div class="connection">
+        <span class="connection-pill">브로커: <strong id="brokerLabel">연결 준비 중</strong></span>
+        <span class="connection-pill">상태: <strong id="connectionStatus">Disconnected</strong></span>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2 class="card-title">토양 수분 값</h2>
+        <p class="big-value" id="soilValue">--</p>
+        <p class="meta">토픽: <code>farm/soil</code></p>
+      </article>
+
+      <article class="card">
+        <h2 class="card-title">토양 상태</h2>
+        <div class="status-badge wet" id="soilStatus">대기 중</div>
+        <p class="meta">기준: 500 이하 = 건조, 500 초과 = 정상</p>
+      </article>
+
+      <article class="card">
+        <h2 class="card-title">펌프 상태</h2>
+        <div class="pump-state" id="pumpState">--</div>
+        <div class="controls">
+          <button class="btn-on" id="pumpOnBtn" type="button">Pump ON</button>
+          <button class="btn-off" id="pumpOffBtn" type="button">Pump OFF</button>
+        </div>
+        <p class="meta">토픽: <code>farm/pump</code></p>
+      </article>
+
+      <article class="card card-wide">
+        <h2 class="card-title">실시간 토양 수분 그래프</h2>
+        <div class="chart-wrap">
+          <canvas id="soilChart"></canvas>
+        </div>
+        <p class="meta">최근 데이터 20개 이상을 유지하면서 시간 흐름에 따라 갱신됩니다.</p>
+      </article>
+
+      <article class="card card-wide">
+        <h2 class="card-title">연결 설정 안내</h2>
+        <ul class="config-list">
+          <li>기본값은 아래 JavaScript 설정을 따르며, 외부 배포 후에는 URL 파라미터로도 바꿀 수 있습니다.</li>
+          <li>예: <code>?host=mqtt.example.com&amp;port=8084&amp;path=%2F&amp;ssl=true</code></li>
+          <li>예: <code>https://your-dashboard.netlify.app/?host=mqtt.example.com&amp;port=8084&amp;path=%2F&amp;ssl=true</code></li>
+        </ul>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    /*
+      ================================
+      1. MQTT 브로커 접속 정보 설정
+      ================================
+
+      아래 값만 실제 환경에 맞게 바꾸면 됩니다.
+      외부 공개용으로는 URL 파라미터로 덮어쓸 수도 있습니다.
+
+      host     : MQTT 브로커 주소 또는 도메인
+      port     : WebSocket 포트
+      path     : WebSocket 경로
+      useSSL   : true면 wss://, false면 ws://
+      clientId : 브라우저에서 접속할 MQTT 클라이언트 ID
+    */
+    const defaultMqttConfig = {
+      host: "localhost",
+      port: 9001,
+      path: "/mqtt",
+      useSSL: false,
+      clientId: "smartfarm-dashboard-" + Math.random().toString(16).slice(2, 10)
+    };
+
+    /*
+      URL 예시:
+      https://your-dashboard.netlify.app/?host=mqtt.example.com&port=8084&path=%2F&ssl=true
+    */
+    const params = new URLSearchParams(window.location.search);
+    const mqttConfig = {
+      host: params.get("host") || defaultMqttConfig.host,
+      port: Number(params.get("port") || defaultMqttConfig.port),
+      path: params.get("path") || defaultMqttConfig.path,
+      useSSL: params.get("ssl")
+        ? params.get("ssl") === "true"
+        : defaultMqttConfig.useSSL,
+      clientId: defaultMqttConfig.clientId
+    };
+
+    /*
+      토픽 이름을 한곳에 모아두면 나중에 수정하기 쉽습니다.
+    */
+    const topics = {
+      soil: "farm/soil",
+      pump: "farm/pump"
+    };
+
+    /*
+      그래프에 표시할 최대 데이터 개수입니다.
+      최소 20개 조건을 만족하도록 20개로 설정했습니다.
+      더 길게 보고 싶다면 숫자를 늘리면 됩니다.
+    */
+    const MAX_POINTS = 20;
+
+    /*
+      화면에 자주 쓰는 요소들을 미리 찾아둡니다.
+      이렇게 하면 코드가 읽기 쉬워집니다.
+    */
+    const brokerLabel = document.getElementById("brokerLabel");
+    const connectionStatus = document.getElementById("connectionStatus");
+    const soilValue = document.getElementById("soilValue");
+    const soilStatus = document.getElementById("soilStatus");
+    const pumpState = document.getElementById("pumpState");
+    const pumpOnBtn = document.getElementById("pumpOnBtn");
+    const pumpOffBtn = document.getElementById("pumpOffBtn");
+
+    /*
+      브로커 주소 표시용 문자열을 만들어 상단에 보여줍니다.
+    */
+    const protocol = mqttConfig.useSSL ? "wss" : "ws";
+    brokerLabel.textContent = `${protocol}://${mqttConfig.host}:${mqttConfig.port}${mqttConfig.path}`;
+
+    /*
+      2. 차트 초기화
+      - labels: x축 시간 표시
+      - data: y축 토양 수분 값
+    */
+    const chartContext = document.getElementById("soilChart");
+    const soilChart = new Chart(chartContext, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "Soil Moisture",
+            data: [],
+            borderColor: "#2d6a4f",
+            backgroundColor: "rgba(45, 106, 79, 0.16)",
+            borderWidth: 3,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: {
+            display: true
+          }
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: "#4e665a"
+            },
+            grid: {
+              color: "rgba(0, 0, 0, 0.05)"
+            }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              color: "#4e665a"
+            },
+            grid: {
+              color: "rgba(0, 0, 0, 0.06)"
+            }
+          }
+        }
+      }
+    });
+
+    /*
+      현재 시간을 HH:MM:SS 형식으로 만들어 그래프 x축에 사용합니다.
+    */
+    function getTimeLabel() {
+      return new Date().toLocaleTimeString("ko-KR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    }
+
+    /*
+      새 토양 수분 데이터를 화면과 그래프에 반영합니다.
+    */
+    function updateSoilUI(value) {
+      soilValue.textContent = value;
+
+      if (value <= 500) {
+        soilStatus.textContent = "건조 (dry)";
+        soilStatus.className = "status-badge dry";
+      } else {
+        soilStatus.textContent = "정상 (wet)";
+        soilStatus.className = "status-badge wet";
+      }
+
+      soilChart.data.labels.push(getTimeLabel());
+      soilChart.data.datasets[0].data.push(value);
+
+      /*
+        데이터가 MAX_POINTS를 넘으면 가장 오래된 데이터를 제거합니다.
+        이렇게 하면 최근 데이터만 유지할 수 있습니다.
+      */
+      if (soilChart.data.labels.length > MAX_POINTS) {
+        soilChart.data.labels.shift();
+        soilChart.data.datasets[0].data.shift();
+      }
+
+      soilChart.update();
+    }
+
+    /*
+      펌프 상태를 보기 좋게 표기합니다.
+      대소문자 섞여서 와도 ON / OFF 형태로 맞춰줍니다.
+    */
+    function updatePumpUI(value) {
+      const normalized = String(value).trim().toUpperCase();
+      pumpState.textContent = normalized === "ON" ? "ON" : "OFF";
+    }
+
+    /*
+      MQTT 연결 상태 텍스트를 바꾸는 함수입니다.
+    */
+    function setConnectionState(text) {
+      connectionStatus.textContent = text;
+    }
+
+    /*
+      3. MQTT 연결용 URL 생성
+      mqtt.js는 ws:// 또는 wss:// 형태의 전체 URL을 사용합니다.
+    */
+    const brokerUrl = `${protocol}://${mqttConfig.host}:${mqttConfig.port}${mqttConfig.path}`;
+    let client = null;
+
+    /*
+      버튼은 연결되었을 때만 누를 수 있게 합니다.
+    */
+    function togglePumpButtons(isConnected) {
+      pumpOnBtn.disabled = !isConnected;
+      pumpOffBtn.disabled = !isConnected;
+    }
+
+    /*
+      MQTT 브로커에 연결되면 토픽 구독을 시작합니다.
+    */
+    function onConnect() {
+      setConnectionState("Connected");
+      togglePumpButtons(true);
+
+      client.subscribe(topics.soil, function (error) {
+        if (error) {
+          console.error("soil topic subscribe failed:", error);
+        }
+      });
+
+      client.subscribe(topics.pump, function (error) {
+        if (error) {
+          console.error("pump topic subscribe failed:", error);
+        }
+      });
+    }
+
+    /*
+      연결 실패 시 상태를 표시합니다.
+    */
+    function onFailure(error) {
+      console.error("MQTT connection failed:", error);
+      setConnectionState("Connection Failed");
+      togglePumpButtons(false);
+    }
+
+    /*
+      실제 연결 시작
+      useSSL: true 이면 wss로 연결됩니다.
+      reconnect: true 이면 끊어졌을 때 자동 재접속을 시도합니다.
+    */
+    function connectMQTT() {
+      setConnectionState("Connecting...");
+      togglePumpButtons(false);
+
+      /*
+        mqtt.connect()를 호출하면 브로커와 WebSocket으로 연결됩니다.
+        reconnectPeriod는 연결이 끊어졌을 때 자동 재접속 간격(ms)입니다.
+      */
+      client = mqtt.connect(brokerUrl, {
+        clientId: mqttConfig.clientId,
+        reconnectPeriod: 3000,
+        connectTimeout: 5000
+      });
+
+      /*
+        정상 연결되면 connect 이벤트가 발생합니다.
+      */
+      client.on("connect", function () {
+        onConnect();
+      });
+
+      /*
+        메시지를 받았을 때 토픽별로 화면을 갱신합니다.
+      */
+      client.on("message", function (topic, payload) {
+        const message = payload.toString();
+
+        if (topic === topics.soil) {
+          const value = Number(message);
+
+          if (!Number.isNaN(value)) {
+            updateSoilUI(value);
+          }
+        }
+
+        if (topic === topics.pump) {
+          updatePumpUI(message);
+        }
+      });
+
+      /*
+        재연결 또는 끊김 상황도 사용자에게 보여줍니다.
+      */
+      client.on("reconnect", function () {
+        setConnectionState("Reconnecting...");
+        togglePumpButtons(false);
+      });
+
+      client.on("close", function () {
+        setConnectionState("Disconnected");
+        togglePumpButtons(false);
+      });
+
+      client.on("error", function (error) {
+        onFailure(error);
+      });
+    }
+
+    /*
+      4. 버튼 클릭 시 pump 토픽으로 ON / OFF publish
+    */
+    function publishPumpState(state) {
+      if (!client || !client.connected) {
+        alert("MQTT 브로커에 연결되어 있지 않습니다.");
+        return;
+      }
+
+      client.publish(topics.pump, state);
+
+      /*
+        publish 직후 바로 화면에도 반영하면 사용자 경험이 좋아집니다.
+        실제 장비에서 다시 같은 상태 메시지를 보내줘도 문제 없습니다.
+      */
+      updatePumpUI(state);
+    }
+
+    pumpOnBtn.addEventListener("click", function () {
+      publishPumpState("ON");
+    });
+
+    pumpOffBtn.addEventListener("click", function () {
+      publishPumpState("OFF");
+    });
+
+    /*
+      첫 로딩 시 기본 상태
+    */
+    togglePumpButtons(false);
+    connectMQTT();
+  </script>
+</body>
+</html>
