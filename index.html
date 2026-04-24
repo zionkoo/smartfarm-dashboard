@@ -1176,6 +1176,21 @@
     }
 
     /*
+      연결 정보가 바뀌었을 때 자동으로 다시 연결합니다.
+      change 이벤트를 쓰면 입력을 마친 뒤에만 동작해서 과한 재연결을 줄일 수 있습니다.
+    */
+    function reconnectFromFormChange() {
+      const host = hostInput.value.trim();
+      const port = portInput.value.trim();
+
+      if (!host || !port) {
+        return;
+      }
+
+      connectMQTT();
+    }
+
+    /*
       4. 버튼 클릭 시 pump 토픽으로 ON / OFF publish
     */
     function publishPumpState(state) {
@@ -1203,6 +1218,19 @@
 
     connectBtn.addEventListener("click", function () {
       connectMQTT();
+    });
+
+    [hostInput, portInput, pathInput, usernameInput, passwordInput].forEach(function (input) {
+      input.addEventListener("change", function () {
+        reconnectFromFormChange();
+      });
+
+      input.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          connectMQTT();
+        }
+      });
     });
 
     clearSavedLoginBtn.addEventListener("click", function () {
