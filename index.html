@@ -228,6 +228,10 @@
       background: var(--wet);
     }
 
+    .caution {
+      background: #d59b2c;
+    }
+
     .pump-state {
       display: inline-block;
       margin-top: 6px;
@@ -468,8 +472,10 @@
         <h2 class="card-title">LED 광량</h2>
         <div class="value-row">
           <p class="big-value" id="ledValue">--</p>
-          <span class="unit">lux</span>
+          <span class="unit">PPFD</span>
         </div>
+        <div class="status-badge wet" id="ledStatus">대기 중</div>
+        <p class="meta">기준: 최소 100, 권장 150 - 250 μmol/m²/s</p>
         <p class="meta">토픽: <code>farm/led</code></p>
       </article>
 
@@ -618,6 +624,7 @@
     const soilStatus = document.getElementById("soilStatus");
     const pumpState = document.getElementById("pumpState");
     const ledValue = document.getElementById("ledValue");
+    const ledStatus = document.getElementById("ledStatus");
     const ecValue = document.getElementById("ecValue");
     const ecStatus = document.getElementById("ecStatus");
     const phValue = document.getElementById("phValue");
@@ -800,7 +807,28 @@
       숫자가 아니어도 문자열 그대로 표시할 수 있게 단순화했습니다.
     */
     function updateLedUI(value) {
+      const numericValue = Number(value);
       ledValue.textContent = value;
+
+      if (Number.isNaN(numericValue)) {
+        ledStatus.textContent = "확인 필요";
+        ledStatus.className = "status-badge dry";
+        return;
+      }
+
+      if (numericValue < 100) {
+        ledStatus.textContent = "부족";
+        ledStatus.className = "status-badge dry";
+      } else if (numericValue < 150) {
+        ledStatus.textContent = "최소권";
+        ledStatus.className = "status-badge caution";
+      } else if (numericValue <= 250) {
+        ledStatus.textContent = "적정";
+        ledStatus.className = "status-badge wet";
+      } else {
+        ledStatus.textContent = "높음";
+        ledStatus.className = "status-badge dry";
+      }
     }
 
     function updateEcUI(value) {
