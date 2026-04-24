@@ -430,6 +430,29 @@
       color: var(--text-main);
     }
 
+    .help-banner {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: #f4f7ef;
+      color: var(--text-soft);
+      font-weight: 700;
+      line-height: 1.5;
+      border: 1px solid rgba(23, 59, 45, 0.08);
+    }
+
+    .help-banner.error {
+      background: #fff1f1;
+      color: #a23a3a;
+      border-color: rgba(214, 69, 69, 0.2);
+    }
+
+    .help-banner.success {
+      background: #ecf8ee;
+      color: #1f7a33;
+      border-color: rgba(47, 158, 68, 0.18);
+    }
+
     .timestamp {
       margin-top: 10px;
       font-size: 0.9rem;
@@ -615,6 +638,9 @@
           <input id="rememberLoginCheckbox" type="checkbox" />
           로그인 정보를 이 브라우저에 저장
         </label>
+        <div class="help-banner" id="loginHelpBanner">
+          현재 계정과 비밀번호를 확인한 뒤 연결해보세요. 연결이 안 되면 저장 삭제 후 다시 입력하면 가장 빠릅니다.
+        </div>
         <p class="meta">비밀번호는 URL에 넣지 않고 페이지에서 직접 입력하는 방식을 권장합니다.</p>
       </article>
 
@@ -726,6 +752,7 @@
     const rememberLoginCheckbox = document.getElementById("rememberLoginCheckbox");
     const activeUsernameLabel = document.getElementById("activeUsernameLabel");
     const savedLoginLabel = document.getElementById("savedLoginLabel");
+    const loginHelpBanner = document.getElementById("loginHelpBanner");
     const STORAGE_KEY = "smartfarm-dashboard-login";
     const STALE_WARNING_MS = 30000;
     const STALE_DELAY_MS = 90000;
@@ -1045,6 +1072,15 @@
       connectionStatus.textContent = text;
     }
 
+    function setLoginHelp(message, tone) {
+      loginHelpBanner.textContent = message;
+      loginHelpBanner.className = "help-banner";
+
+      if (tone) {
+        loginHelpBanner.classList.add(tone);
+      }
+    }
+
     /*
       3. MQTT 연결용 URL 생성
       mqtt.js는 ws:// 또는 wss:// 형태의 전체 URL을 사용합니다.
@@ -1091,6 +1127,7 @@
     */
     function onConnect() {
       setConnectionState("Connected");
+      setLoginHelp("연결되었습니다. 이제 센서 데이터가 들어오면 카드와 그래프가 함께 갱신됩니다.", "success");
       togglePumpButtons(true);
 
       client.subscribe(topics.soil, function (error) {
@@ -1130,6 +1167,7 @@
     function onFailure(error) {
       console.error("MQTT connection failed:", error);
       setConnectionState("Connection Failed");
+      setLoginHelp("연결에 실패했습니다. 현재 계정이 zionkoo3인지, 비밀번호가 그 계정용 비밀번호인지 다시 확인해보세요.", "error");
       togglePumpButtons(false);
       toggleConnectButton(false);
     }
@@ -1161,6 +1199,7 @@
       }
 
       setConnectionState("Connecting...");
+      setLoginHelp("브로커에 연결 중입니다. 잠시만 기다려주세요.", "");
       togglePumpButtons(false);
       toggleConnectButton(true);
       updateBrokerLabel();
@@ -1229,12 +1268,14 @@
       */
       client.on("reconnect", function () {
         setConnectionState("Reconnecting...");
+        setLoginHelp("연결이 잠시 끊겨 다시 연결을 시도하고 있습니다.", "");
         togglePumpButtons(false);
         toggleConnectButton(true);
       });
 
       client.on("close", function () {
         setConnectionState("Disconnected");
+        setLoginHelp("연결이 끊어졌습니다. 비밀번호를 확인한 뒤 다시 연결해보세요.", "error");
         togglePumpButtons(false);
         toggleConnectButton(false);
       });
@@ -1317,6 +1358,7 @@
       passwordInput.value = "";
       updateLoginSummary("미저장");
       setConnectionState("Saved Login Cleared");
+      setLoginHelp("저장된 로그인 정보를 지웠습니다. zionkoo3 계정과 비밀번호를 다시 입력해보세요.", "");
     });
 
     togglePasswordVisibilityBtn.addEventListener("click", function () {
@@ -1354,6 +1396,7 @@
       connectMQTT();
     } else {
       setConnectionState("비밀번호 입력 후 연결");
+      setLoginHelp("현재 계정과 비밀번호를 확인한 뒤 연결해보세요. 연결이 안 되면 저장 삭제 후 다시 입력하면 가장 빠릅니다.", "");
     }
   </script>
 </body>
