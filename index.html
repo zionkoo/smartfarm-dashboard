@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Farm MQTT Dashboard</title>
+  <title>Zionkoo's SmartFarm Dashboard</title>
 
   <!--
     Chart.js: 실시간 토양 수분 그래프를 그리기 위한 라이브러리
@@ -477,6 +477,10 @@
       background: #d64545;
     }
 
+    .status-display.waiting {
+      background: #7b8f85;
+    }
+
     .help-banner {
       margin-top: 14px;
       padding: 14px 16px;
@@ -557,7 +561,7 @@
 <body>
   <main class="dashboard">
     <section class="hero">
-      <h1>Smart Farm Dashboard</h1>
+      <h1>Zionkoo's SmartFarm Dashboard</h1>
       <p>
         MQTT WebSocket으로 들어오는 스마트팜 센서 데이터를 실시간으로 보여주는 대시보드입니다.
         토양 수분, 건조/정상 상태, 펌프 상태, LED 광량, EC, pH, 최근 20개 이상의 데이터 흐름을 한눈에 확인할 수 있습니다.
@@ -654,8 +658,12 @@
         </div>
         <div class="status-panel">
           <div class="status-panel-head">
-            <span class="status-panel-title">연결 테스트 상태</span>
+            <span class="status-panel-title">브로커 연결 상태</span>
             <div class="status-display disconnected" id="statusDisplay">비밀번호 입력 전</div>
+          </div>
+          <div class="status-panel-head">
+            <span class="status-panel-title">센서 데이터 상태</span>
+            <div class="status-display waiting" id="dataStatusDisplay">데이터 대기</div>
           </div>
           <div class="help-banner" id="loginHelpBanner">
             현재 계정과 비밀번호를 확인한 뒤 연결해보세요. 연결이 안 되면 저장 삭제 후 다시 입력하면 가장 빠릅니다.
@@ -806,6 +814,7 @@
     const activeUsernameLabel = document.getElementById("activeUsernameLabel");
     const savedLoginLabel = document.getElementById("savedLoginLabel");
     const statusDisplay = document.getElementById("statusDisplay");
+    const dataStatusDisplay = document.getElementById("dataStatusDisplay");
     const loginHelpBanner = document.getElementById("loginHelpBanner");
     const STORAGE_KEY = "smartfarm-dashboard-login";
     const STALE_WARNING_MS = 30000;
@@ -817,6 +826,10 @@
       ec: null,
       ph: null
     };
+
+    function hasAnyRecentSensorData() {
+      return Object.values(lastSeenAt).some(Boolean);
+    }
 
     /*
       저장된 로그인 정보가 있으면 불러옵니다.
@@ -996,11 +1009,37 @@
         item.badge.textContent = "오래됨";
         item.badge.className = "status-badge dry";
       }
+
+      updateDataStatus();
     }
 
     function markLastSeen(type) {
       lastSeenAt[type] = Date.now();
       updateFreshnessUI(type);
+    }
+
+    function updateDataStatus() {
+      const timestamps = Object.values(lastSeenAt).filter(Boolean);
+
+      if (!timestamps.length) {
+        dataStatusDisplay.textContent = "데이터 대기";
+        dataStatusDisplay.className = "status-display waiting";
+        return;
+      }
+
+      const latestSeen = Math.max(...timestamps);
+      const elapsed = Date.now() - latestSeen;
+
+      if (elapsed < STALE_WARNING_MS) {
+        dataStatusDisplay.textContent = "실시간 수신 중";
+        dataStatusDisplay.className = "status-display connected";
+      } else if (elapsed < STALE_DELAY_MS) {
+        dataStatusDisplay.textContent = "수신 지연";
+        dataStatusDisplay.className = "status-display connecting";
+      } else {
+        dataStatusDisplay.textContent = "데이터 오래됨";
+        dataStatusDisplay.className = "status-display failed";
+      }
     }
 
     /*
@@ -1135,6 +1174,16 @@
         statusDisplay.classList.add("failed");
       } else {
         statusDisplay.classList.add("disconnected");
+      }
+
+      if (text === "Connected" && !hasAnyRecentSensorData()) {
+        dataStatusDisplay.textContent = "데이터 대기";
+        dataStatusDisplay.className = "status-display waiting";
+      }
+
+      if (text === "Connection Failed" || text === "Disconnected") {
+        dataStatusDisplay.textContent = hasAnyRecentSensorData() ? "데이터 중단" : "데이터 대기";
+        dataStatusDisplay.className = "status-display failed";
       }
     }
 
@@ -1451,12 +1500,14 @@
     updateFreshnessUI("led");
     updateFreshnessUI("ec");
     updateFreshnessUI("ph");
+    updateDataStatus();
     setInterval(function () {
       updateFreshnessUI("soil");
       updateFreshnessUI("pump");
       updateFreshnessUI("led");
       updateFreshnessUI("ec");
       updateFreshnessUI("ph");
+      updateDataStatus();
     }, 5000);
     if (shouldAutoConnectOnLoad()) {
       connectMQTT();
