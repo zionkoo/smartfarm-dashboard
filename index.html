@@ -430,6 +430,53 @@
       color: var(--text-main);
     }
 
+    .status-panel {
+      margin-bottom: 16px;
+      padding: 16px 18px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #f4f8ef, #ffffff);
+      border: 1px solid rgba(23, 59, 45, 0.08);
+    }
+
+    .status-panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .status-panel-title {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: var(--text-soft);
+    }
+
+    .status-display {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 130px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-weight: 800;
+      color: white;
+      background: #7b8f85;
+    }
+
+    .status-display.connecting {
+      background: #d59b2c;
+    }
+
+    .status-display.connected {
+      background: #2f9e44;
+    }
+
+    .status-display.failed,
+    .status-display.disconnected {
+      background: #d64545;
+    }
+
     .help-banner {
       margin-top: 14px;
       padding: 14px 16px;
@@ -605,6 +652,15 @@
           <div class="summary-pill">현재 계정 <strong id="activeUsernameLabel">zionkoo3</strong></div>
           <div class="summary-pill">저장 상태 <strong id="savedLoginLabel">미저장</strong></div>
         </div>
+        <div class="status-panel">
+          <div class="status-panel-head">
+            <span class="status-panel-title">연결 테스트 상태</span>
+            <div class="status-display disconnected" id="statusDisplay">비밀번호 입력 전</div>
+          </div>
+          <div class="help-banner" id="loginHelpBanner">
+            현재 계정과 비밀번호를 확인한 뒤 연결해보세요. 연결이 안 되면 저장 삭제 후 다시 입력하면 가장 빠릅니다.
+          </div>
+        </div>
         <div class="form-grid">
           <div class="field">
             <label for="hostInput">Broker Host</label>
@@ -638,9 +694,6 @@
           <input id="rememberLoginCheckbox" type="checkbox" />
           로그인 정보를 이 브라우저에 저장
         </label>
-        <div class="help-banner" id="loginHelpBanner">
-          현재 계정과 비밀번호를 확인한 뒤 연결해보세요. 연결이 안 되면 저장 삭제 후 다시 입력하면 가장 빠릅니다.
-        </div>
         <p class="meta">비밀번호는 URL에 넣지 않고 페이지에서 직접 입력하는 방식을 권장합니다.</p>
       </article>
 
@@ -752,6 +805,7 @@
     const rememberLoginCheckbox = document.getElementById("rememberLoginCheckbox");
     const activeUsernameLabel = document.getElementById("activeUsernameLabel");
     const savedLoginLabel = document.getElementById("savedLoginLabel");
+    const statusDisplay = document.getElementById("statusDisplay");
     const loginHelpBanner = document.getElementById("loginHelpBanner");
     const STORAGE_KEY = "smartfarm-dashboard-login";
     const STALE_WARNING_MS = 30000;
@@ -1070,6 +1124,18 @@
     */
     function setConnectionState(text) {
       connectionStatus.textContent = text;
+      statusDisplay.textContent = text;
+      statusDisplay.className = "status-display";
+
+      if (text === "Connected") {
+        statusDisplay.classList.add("connected");
+      } else if (text === "Connecting..." || text === "Reconnecting...") {
+        statusDisplay.classList.add("connecting");
+      } else if (text === "Connection Failed") {
+        statusDisplay.classList.add("failed");
+      } else {
+        statusDisplay.classList.add("disconnected");
+      }
     }
 
     function setLoginHelp(message, tone) {
