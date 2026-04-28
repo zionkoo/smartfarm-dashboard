@@ -676,6 +676,32 @@
         <p class="meta">토픽: <code>farm/ph</code></p>
       </article>
 
+      <article class="card metric-card">
+        <h2 class="card-title">온도</h2>
+        <div class="value-row">
+          <p class="big-value" id="tempValue">--</p>
+          <span class="unit">°C</span>
+        </div>
+        <div class="status-badge wet" id="tempStatus">대기 중</div>
+        <div class="status-badge neutral" id="tempFreshness">수신 대기</div>
+        <p class="timestamp" id="tempUpdatedAt">마지막 수신: --</p>
+        <p class="meta">기준: 18 - 26°C = 적정</p>
+        <p class="meta">토픽: <code>farm/temp</code></p>
+      </article>
+
+      <article class="card metric-card">
+        <h2 class="card-title">습도</h2>
+        <div class="value-row">
+          <p class="big-value" id="humidityValue">--</p>
+          <span class="unit">%RH</span>
+        </div>
+        <div class="status-badge wet" id="humidityStatus">대기 중</div>
+        <div class="status-badge neutral" id="humidityFreshness">수신 대기</div>
+        <p class="timestamp" id="humidityUpdatedAt">마지막 수신: --</p>
+        <p class="meta">기준: 40 - 70% = 적정</p>
+        <p class="meta">토픽: <code>farm/humidity</code></p>
+      </article>
+
       <article class="card chart-card">
         <h2 class="card-title">실시간 토양 수분 그래프</h2>
         <div class="chart-wrap">
@@ -759,6 +785,8 @@
           <button class="btn-test" id="ledTestBtn" type="button">LED 180</button>
           <button class="btn-test" id="ecTestBtn" type="button">EC 1.7</button>
           <button class="btn-test" id="phTestBtn" type="button">pH 5.8</button>
+          <button class="btn-test" id="tempTestBtn" type="button">Temp 23</button>
+          <button class="btn-test" id="humidityTestBtn" type="button">Humidity 55</button>
         </div>
       </details>
     </section>
@@ -813,7 +841,9 @@
       pump: "farm/pump",
       led: "farm/led",
       ec: "farm/ec",
-      ph: "farm/ph"
+      ph: "farm/ph",
+      temp: "farm/temp",
+      humidity: "farm/humidity"
     };
 
     /*
@@ -848,6 +878,14 @@
     const phStatus = document.getElementById("phStatus");
     const phFreshness = document.getElementById("phFreshness");
     const phUpdatedAt = document.getElementById("phUpdatedAt");
+    const tempValue = document.getElementById("tempValue");
+    const tempStatus = document.getElementById("tempStatus");
+    const tempFreshness = document.getElementById("tempFreshness");
+    const tempUpdatedAt = document.getElementById("tempUpdatedAt");
+    const humidityValue = document.getElementById("humidityValue");
+    const humidityStatus = document.getElementById("humidityStatus");
+    const humidityFreshness = document.getElementById("humidityFreshness");
+    const humidityUpdatedAt = document.getElementById("humidityUpdatedAt");
     const pumpOnBtn = document.getElementById("pumpOnBtn");
     const pumpOffBtn = document.getElementById("pumpOffBtn");
     const soilDryTestBtn = document.getElementById("soilDryTestBtn");
@@ -855,6 +893,8 @@
     const ledTestBtn = document.getElementById("ledTestBtn");
     const ecTestBtn = document.getElementById("ecTestBtn");
     const phTestBtn = document.getElementById("phTestBtn");
+    const tempTestBtn = document.getElementById("tempTestBtn");
+    const humidityTestBtn = document.getElementById("humidityTestBtn");
     const hostInput = document.getElementById("hostInput");
     const portInput = document.getElementById("portInput");
     const pathInput = document.getElementById("pathInput");
@@ -877,7 +917,9 @@
       pump: null,
       led: null,
       ec: null,
-      ph: null
+      ph: null,
+      temp: null,
+      humidity: null
     };
 
     function hasAnyRecentSensorData() {
@@ -1036,7 +1078,9 @@
         pump: { badge: pumpFreshness, text: pumpUpdatedAt },
         led: { badge: ledFreshness, text: ledUpdatedAt },
         ec: { badge: ecFreshness, text: ecUpdatedAt },
-        ph: { badge: phFreshness, text: phUpdatedAt }
+        ph: { badge: phFreshness, text: phUpdatedAt },
+        temp: { badge: tempFreshness, text: tempUpdatedAt },
+        humidity: { badge: humidityFreshness, text: humidityUpdatedAt }
       };
 
       const item = map[type];
@@ -1211,6 +1255,52 @@
       }
     }
 
+    function updateTempUI(value) {
+      const numericValue = Number(value);
+      tempValue.textContent = value;
+      markLastSeen("temp");
+
+      if (Number.isNaN(numericValue)) {
+        tempStatus.textContent = "확인 필요";
+        tempStatus.className = "status-badge dry";
+        return;
+      }
+
+      if (numericValue < 18) {
+        tempStatus.textContent = "낮음";
+        tempStatus.className = "status-badge dry";
+      } else if (numericValue > 26) {
+        tempStatus.textContent = "높음";
+        tempStatus.className = "status-badge dry";
+      } else {
+        tempStatus.textContent = "적정";
+        tempStatus.className = "status-badge wet";
+      }
+    }
+
+    function updateHumidityUI(value) {
+      const numericValue = Number(value);
+      humidityValue.textContent = value;
+      markLastSeen("humidity");
+
+      if (Number.isNaN(numericValue)) {
+        humidityStatus.textContent = "확인 필요";
+        humidityStatus.className = "status-badge dry";
+        return;
+      }
+
+      if (numericValue < 40) {
+        humidityStatus.textContent = "낮음";
+        humidityStatus.className = "status-badge dry";
+      } else if (numericValue > 70) {
+        humidityStatus.textContent = "높음";
+        humidityStatus.className = "status-badge dry";
+      } else {
+        humidityStatus.textContent = "적정";
+        humidityStatus.className = "status-badge wet";
+      }
+    }
+
     /*
       MQTT 연결 상태 텍스트를 바꾸는 함수입니다.
     */
@@ -1284,7 +1374,7 @@
     }
 
     function toggleTestButtons(isConnected) {
-      [soilDryTestBtn, soilWetTestBtn, ledTestBtn, ecTestBtn, phTestBtn].forEach(function (button) {
+      [soilDryTestBtn, soilWetTestBtn, ledTestBtn, ecTestBtn, phTestBtn, tempTestBtn, humidityTestBtn].forEach(function (button) {
         button.disabled = !isConnected;
       });
     }
@@ -1332,6 +1422,18 @@
       client.subscribe(topics.ph, function (error) {
         if (error) {
           console.error("ph topic subscribe failed:", error);
+        }
+      });
+
+      client.subscribe(topics.temp, function (error) {
+        if (error) {
+          console.error("temp topic subscribe failed:", error);
+        }
+      });
+
+      client.subscribe(topics.humidity, function (error) {
+        if (error) {
+          console.error("humidity topic subscribe failed:", error);
         }
       });
     }
@@ -1436,6 +1538,14 @@
 
         if (topic === topics.ph) {
           updatePhUI(message);
+        }
+
+        if (topic === topics.temp) {
+          updateTempUI(message);
+        }
+
+        if (topic === topics.humidity) {
+          updateHumidityUI(message);
         }
       });
 
@@ -1542,6 +1652,14 @@
       publishTestMessage(topics.ph, 5.8);
     });
 
+    tempTestBtn.addEventListener("click", function () {
+      publishTestMessage(topics.temp, 23);
+    });
+
+    humidityTestBtn.addEventListener("click", function () {
+      publishTestMessage(topics.humidity, 55);
+    });
+
     connectBtn.addEventListener("click", function () {
       connectMQTT();
     });
@@ -1593,6 +1711,8 @@
     updateFreshnessUI("led");
     updateFreshnessUI("ec");
     updateFreshnessUI("ph");
+    updateFreshnessUI("temp");
+    updateFreshnessUI("humidity");
     updateDataStatus();
     setInterval(function () {
       updateFreshnessUI("soil");
@@ -1600,6 +1720,8 @@
       updateFreshnessUI("led");
       updateFreshnessUI("ec");
       updateFreshnessUI("ph");
+      updateFreshnessUI("temp");
+      updateFreshnessUI("humidity");
       updateDataStatus();
     }, 5000);
     if (shouldAutoConnectOnLoad()) {
