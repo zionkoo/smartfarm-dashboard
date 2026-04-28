@@ -379,6 +379,11 @@
       color: var(--text-main);
     }
 
+    .btn-test {
+      background: linear-gradient(135deg, #f0d35a, #d7b843);
+      color: #234231;
+    }
+
     .toggle-row {
       display: flex;
       align-items: center;
@@ -713,6 +718,18 @@
           <li>예: <code>https://your-dashboard.netlify.app/?host=mqtt.example.com&amp;port=8084&amp;path=%2F&amp;ssl=true</code></li>
         </ul>
       </article>
+
+      <article class="card guide-card">
+        <h2 class="card-title">센서 수신 테스트</h2>
+        <p class="meta">HiveMQ Web Client 없이도 아래 버튼으로 테스트 메시지를 publish할 수 있습니다.</p>
+        <div class="controls">
+          <button class="btn-test" id="soilDryTestBtn" type="button">Soil 430</button>
+          <button class="btn-test" id="soilWetTestBtn" type="button">Soil 620</button>
+          <button class="btn-test" id="ledTestBtn" type="button">LED 180</button>
+          <button class="btn-test" id="ecTestBtn" type="button">EC 1.7</button>
+          <button class="btn-test" id="phTestBtn" type="button">pH 5.8</button>
+        </div>
+      </article>
     </section>
   </main>
 
@@ -802,6 +819,11 @@
     const phUpdatedAt = document.getElementById("phUpdatedAt");
     const pumpOnBtn = document.getElementById("pumpOnBtn");
     const pumpOffBtn = document.getElementById("pumpOffBtn");
+    const soilDryTestBtn = document.getElementById("soilDryTestBtn");
+    const soilWetTestBtn = document.getElementById("soilWetTestBtn");
+    const ledTestBtn = document.getElementById("ledTestBtn");
+    const ecTestBtn = document.getElementById("ecTestBtn");
+    const phTestBtn = document.getElementById("phTestBtn");
     const hostInput = document.getElementById("hostInput");
     const portInput = document.getElementById("portInput");
     const pathInput = document.getElementById("pathInput");
@@ -1230,6 +1252,12 @@
       pumpOffBtn.disabled = !isConnected;
     }
 
+    function toggleTestButtons(isConnected) {
+      [soilDryTestBtn, soilWetTestBtn, ledTestBtn, ecTestBtn, phTestBtn].forEach(function (button) {
+        button.disabled = !isConnected;
+      });
+    }
+
     /*
       연결 버튼도 연결 중일 때 잠시 비활성화합니다.
     */
@@ -1244,6 +1272,7 @@
       setConnectionState("Connected");
       setLoginHelp("연결되었습니다. 이제 센서 데이터가 들어오면 카드와 그래프가 함께 갱신됩니다.", "success");
       togglePumpButtons(true);
+      toggleTestButtons(true);
 
       client.subscribe(topics.soil, function (error) {
         if (error) {
@@ -1284,6 +1313,7 @@
       setConnectionState("Connection Failed");
       setLoginHelp("연결에 실패했습니다. 현재 계정이 zionkoo3인지, 비밀번호가 그 계정용 비밀번호인지 다시 확인해보세요.", "error");
       togglePumpButtons(false);
+      toggleTestButtons(false);
       toggleConnectButton(false);
     }
 
@@ -1385,6 +1415,7 @@
         setConnectionState("Reconnecting...");
         setLoginHelp("연결이 잠시 끊겨 다시 연결을 시도하고 있습니다.", "");
         togglePumpButtons(false);
+        toggleTestButtons(false);
         toggleConnectButton(true);
       });
 
@@ -1392,6 +1423,7 @@
         setConnectionState("Disconnected");
         setLoginHelp("연결이 끊어졌습니다. 비밀번호를 확인한 뒤 다시 연결해보세요.", "error");
         togglePumpButtons(false);
+        toggleTestButtons(false);
         toggleConnectButton(false);
       });
 
@@ -1442,12 +1474,41 @@
       updatePumpUI(state);
     }
 
+    function publishTestMessage(topic, value) {
+      if (!client || !client.connected) {
+        alert("먼저 MQTT 브로커에 연결해주세요.");
+        return;
+      }
+
+      client.publish(topic, String(value));
+    }
+
     pumpOnBtn.addEventListener("click", function () {
       publishPumpState("ON");
     });
 
     pumpOffBtn.addEventListener("click", function () {
       publishPumpState("OFF");
+    });
+
+    soilDryTestBtn.addEventListener("click", function () {
+      publishTestMessage(topics.soil, 430);
+    });
+
+    soilWetTestBtn.addEventListener("click", function () {
+      publishTestMessage(topics.soil, 620);
+    });
+
+    ledTestBtn.addEventListener("click", function () {
+      publishTestMessage(topics.led, 180);
+    });
+
+    ecTestBtn.addEventListener("click", function () {
+      publishTestMessage(topics.ec, 1.7);
+    });
+
+    phTestBtn.addEventListener("click", function () {
+      publishTestMessage(topics.ph, 5.8);
     });
 
     connectBtn.addEventListener("click", function () {
@@ -1494,6 +1555,7 @@
       첫 로딩 시 기본 상태
     */
     togglePumpButtons(false);
+    toggleTestButtons(false);
     toggleConnectButton(false);
     updateFreshnessUI("soil");
     updateFreshnessUI("pump");
