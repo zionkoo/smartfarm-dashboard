@@ -384,6 +384,35 @@
       color: #234231;
     }
 
+    .collapsible-card[open] .card-title::after {
+      content: "닫기";
+      margin-left: 10px;
+      font-size: 0.82rem;
+      color: var(--text-soft);
+      font-weight: 700;
+    }
+
+    .collapsible-card:not([open]) .card-title::after {
+      content: "열기";
+      margin-left: 10px;
+      font-size: 0.82rem;
+      color: var(--text-soft);
+      font-weight: 700;
+    }
+
+    .collapsible-summary {
+      list-style: none;
+      cursor: pointer;
+    }
+
+    .collapsible-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .collapsible-summary + * {
+      margin-top: 8px;
+    }
+
     .toggle-row {
       display: flex;
       align-items: center;
@@ -719,8 +748,10 @@
         </ul>
       </article>
 
-      <article class="card guide-card">
-        <h2 class="card-title">센서 수신 테스트</h2>
+      <details class="card guide-card collapsible-card">
+        <summary class="collapsible-summary">
+          <h2 class="card-title">센서 수신 테스트</h2>
+        </summary>
         <p class="meta">HiveMQ Web Client 없이도 아래 버튼으로 테스트 메시지를 publish할 수 있습니다.</p>
         <div class="controls">
           <button class="btn-test" id="soilDryTestBtn" type="button">Soil 430</button>
@@ -729,7 +760,7 @@
           <button class="btn-test" id="ecTestBtn" type="button">EC 1.7</button>
           <button class="btn-test" id="phTestBtn" type="button">pH 5.8</button>
         </div>
-      </article>
+      </details>
     </section>
   </main>
 
