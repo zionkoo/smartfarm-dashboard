@@ -460,6 +460,85 @@
       margin-top: 14px;
     }
 
+    .weekly-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 14px 0;
+    }
+
+    .history-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: end;
+      margin: 16px 0 12px;
+    }
+
+    .history-toolbar .field {
+      min-width: 220px;
+      margin: 0;
+    }
+
+    .daily-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .daily-summary-card {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #f4f8ef, #ffffff);
+      border: 1px solid rgba(23, 59, 45, 0.08);
+    }
+
+    .daily-summary-label {
+      font-size: 0.9rem;
+      color: var(--text-soft);
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .daily-summary-value {
+      font-size: 1.1rem;
+      color: var(--text-main);
+      font-weight: 800;
+      line-height: 1.5;
+    }
+
+    .hourly-table-wrap {
+      margin-top: 14px;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid rgba(23, 59, 45, 0.08);
+      background: rgba(255, 255, 255, 0.82);
+    }
+
+    .hourly-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.94rem;
+    }
+
+    .hourly-table th,
+    .hourly-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(23, 59, 45, 0.08);
+    }
+
+    .hourly-table th {
+      background: #eef7ea;
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .hourly-table tr:last-child td {
+      border-bottom: none;
+    }
+
     .login-summary {
       display: flex;
       flex-wrap: wrap;
@@ -607,6 +686,14 @@
       .field-wide {
         grid-column: span 1;
       }
+
+      .daily-summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .weekly-summary-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -730,10 +817,55 @@
         <div class="chart-wrap">
           <canvas id="climateChart"></canvas>
         </div>
+        <div class="history-toolbar">
+          <div class="field">
+            <label for="climateDateInput">조회 날짜</label>
+            <input id="climateDateInput" type="date" />
+          </div>
+          <div class="summary-pill">선택 날짜 기록 <strong id="climateDayCount">0건</strong></div>
+        </div>
+        <div class="daily-summary-grid">
+          <div class="daily-summary-card">
+            <div class="daily-summary-label">온도 요약</div>
+            <div class="daily-summary-value" id="climateTempSummary">평균 - / 최고 - / 최저 -</div>
+          </div>
+          <div class="daily-summary-card">
+            <div class="daily-summary-label">습도 요약</div>
+            <div class="daily-summary-value" id="climateHumiditySummary">평균 - / 최고 - / 최저 -</div>
+          </div>
+          <div class="daily-summary-card">
+            <div class="daily-summary-label">날짜 요약</div>
+            <div class="daily-summary-value" id="climateDateSummary">기록 없음</div>
+          </div>
+        </div>
+        <div class="weekly-summary-grid">
+          <div class="daily-summary-card">
+            <div class="daily-summary-label">최근 7일 평균 온도</div>
+            <div class="daily-summary-value" id="climateWeeklyTempSummary">-</div>
+          </div>
+          <div class="daily-summary-card">
+            <div class="daily-summary-label">최근 7일 평균 습도</div>
+            <div class="daily-summary-value" id="climateWeeklyHumiditySummary">-</div>
+          </div>
+        </div>
+        <div class="hourly-table-wrap">
+          <table class="hourly-table">
+            <thead>
+              <tr>
+                <th>시간</th>
+                <th>평균 온도</th>
+                <th>평균 습도</th>
+                <th>기록 수</th>
+              </tr>
+            </thead>
+            <tbody id="climateHourlyRows"></tbody>
+          </table>
+        </div>
         <div class="history-actions">
+          <button class="btn-connect" id="downloadClimateCsvBtn" type="button">CSV 다운로드</button>
           <button class="btn-clear" id="clearClimateHistoryBtn" type="button">온습도 기록 지우기</button>
         </div>
-        <p class="meta">온도와 습도는 수신 시각 기준으로 저장되며, 페이지를 다시 열어도 이 브라우저 안에서는 기록이 유지됩니다.</p>
+        <p class="meta">온도와 습도는 수신 시각 기준으로 저장되며, 선택한 날짜에 대해 1시간 단위 평균으로도 정리됩니다.</p>
       </article>
 
       <article class="card chart-card">
@@ -942,6 +1074,15 @@
     const savedLoginLabel = document.getElementById("savedLoginLabel");
     const climateRecordCount = document.getElementById("climateRecordCount");
     const climateLastSaved = document.getElementById("climateLastSaved");
+    const climateDateInput = document.getElementById("climateDateInput");
+    const climateDayCount = document.getElementById("climateDayCount");
+    const climateHourlyRows = document.getElementById("climateHourlyRows");
+    const climateTempSummary = document.getElementById("climateTempSummary");
+    const climateHumiditySummary = document.getElementById("climateHumiditySummary");
+    const climateDateSummary = document.getElementById("climateDateSummary");
+    const climateWeeklyTempSummary = document.getElementById("climateWeeklyTempSummary");
+    const climateWeeklyHumiditySummary = document.getElementById("climateWeeklyHumiditySummary");
+    const downloadClimateCsvBtn = document.getElementById("downloadClimateCsvBtn");
     const clearClimateHistoryBtn = document.getElementById("clearClimateHistoryBtn");
     const statusDisplay = document.getElementById("statusDisplay");
     const dataStatusDisplay = document.getElementById("dataStatusDisplay");
@@ -1244,7 +1385,156 @@
       });
     }
 
+    function getLocalDateKey(timestamp) {
+      const date = new Date(timestamp);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function getLatestClimateDateKey() {
+      if (!climateHistory.length) {
+        return getLocalDateKey(Date.now());
+      }
+
+      return getLocalDateKey(climateHistory[climateHistory.length - 1].ts);
+    }
+
+    function renderWeeklyClimateSummary() {
+      const selectedDate = climateDateInput.value || getLatestClimateDateKey();
+      const endDate = new Date(`${selectedDate}T23:59:59`);
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - 6);
+      startDate.setHours(0, 0, 0, 0);
+
+      const weekEntries = climateHistory.filter(function (entry) {
+        return entry.ts >= startDate.getTime() && entry.ts <= endDate.getTime();
+      });
+
+      if (!weekEntries.length) {
+        climateWeeklyTempSummary.textContent = "-";
+        climateWeeklyHumiditySummary.textContent = "-";
+        return;
+      }
+
+      const weekTempAvg = weekEntries.reduce(function (sum, entry) {
+        return sum + Number(entry.temp);
+      }, 0) / weekEntries.length;
+
+      const weekHumidityAvg = weekEntries.reduce(function (sum, entry) {
+        return sum + Number(entry.humidity);
+      }, 0) / weekEntries.length;
+
+      climateWeeklyTempSummary.textContent = `${weekTempAvg.toFixed(1)} °C`;
+      climateWeeklyHumiditySummary.textContent = `${weekHumidityAvg.toFixed(1)} %`;
+    }
+
+    function downloadClimateCsv() {
+      if (!climateHistory.length) {
+        alert("다운로드할 온습도 기록이 없습니다.");
+        return;
+      }
+
+      const rows = [
+        ["timestamp", "date", "time", "temperature_c", "humidity_percent"]
+      ];
+
+      climateHistory.forEach(function (entry) {
+        const date = new Date(entry.ts);
+        const dateText = getLocalDateKey(entry.ts);
+        const timeText = date.toLocaleTimeString("ko-KR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit"
+        });
+
+        rows.push([
+          new Date(entry.ts).toISOString(),
+          dateText,
+          timeText,
+          Number(entry.temp).toFixed(1),
+          Number(entry.humidity).toFixed(1)
+        ]);
+      });
+
+      const csvContent = rows.map(function (row) {
+        return row.join(",");
+      }).join("\n");
+
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `smartfarm-climate-history-${getLatestClimateDateKey()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    }
+
+    function renderHourlyClimateTable() {
+      const selectedDate = climateDateInput.value || getLatestClimateDateKey();
+      const hourlyBuckets = Array.from({ length: 24 }, function (_, hour) {
+        return {
+          hour,
+          tempSum: 0,
+          humiditySum: 0,
+          count: 0
+        };
+      });
+
+      const dayEntries = climateHistory.filter(function (entry) {
+        return getLocalDateKey(entry.ts) === selectedDate;
+      });
+
+      dayEntries.forEach(function (entry) {
+        const hour = new Date(entry.ts).getHours();
+        hourlyBuckets[hour].tempSum += Number(entry.temp);
+        hourlyBuckets[hour].humiditySum += Number(entry.humidity);
+        hourlyBuckets[hour].count += 1;
+      });
+
+      climateDayCount.textContent = `${dayEntries.length}건`;
+
+      if (!dayEntries.length) {
+        climateTempSummary.textContent = "평균 - / 최고 - / 최저 -";
+        climateHumiditySummary.textContent = "평균 - / 최고 - / 최저 -";
+        climateDateSummary.textContent = `${selectedDate} 기록 없음`;
+      } else {
+        const tempValues = dayEntries.map(function (entry) {
+          return Number(entry.temp);
+        });
+        const humidityValues = dayEntries.map(function (entry) {
+          return Number(entry.humidity);
+        });
+
+        const tempAvg = tempValues.reduce(function (sum, value) {
+          return sum + value;
+        }, 0) / tempValues.length;
+        const humidityAvg = humidityValues.reduce(function (sum, value) {
+          return sum + value;
+        }, 0) / humidityValues.length;
+
+        climateTempSummary.textContent = `평균 ${tempAvg.toFixed(1)} °C / 최고 ${Math.max(...tempValues).toFixed(1)} °C / 최저 ${Math.min(...tempValues).toFixed(1)} °C`;
+        climateHumiditySummary.textContent = `평균 ${humidityAvg.toFixed(1)} % / 최고 ${Math.max(...humidityValues).toFixed(1)} % / 최저 ${Math.min(...humidityValues).toFixed(1)} %`;
+        climateDateSummary.textContent = `${selectedDate} / 총 ${dayEntries.length}건`;
+      }
+
+      climateHourlyRows.innerHTML = hourlyBuckets.map(function (bucket) {
+        const hourLabel = `${String(bucket.hour).padStart(2, "0")}:00`;
+        const avgTemp = bucket.count ? `${(bucket.tempSum / bucket.count).toFixed(1)} °C` : "-";
+        const avgHumidity = bucket.count ? `${(bucket.humiditySum / bucket.count).toFixed(1)} %` : "-";
+        const countText = bucket.count ? `${bucket.count}개` : "-";
+
+        return `<tr><td>${hourLabel}</td><td>${avgTemp}</td><td>${avgHumidity}</td><td>${countText}</td></tr>`;
+      }).join("");
+    }
+
     function renderClimateHistory() {
+      if (!climateDateInput.value) {
+        climateDateInput.value = getLatestClimateDateKey();
+      }
+
       climateChart.data.labels = climateHistory.map(function (entry) {
         return formatChartTime(entry.ts);
       });
@@ -1260,6 +1550,8 @@
       climateLastSaved.textContent = climateHistory.length
         ? formatSavedDateTime(climateHistory[climateHistory.length - 1].ts)
         : "--";
+      renderHourlyClimateTable();
+      renderWeeklyClimateSummary();
     }
 
     function pushClimateHistoryPoint() {
@@ -1913,7 +2205,17 @@
     clearClimateHistoryBtn.addEventListener("click", function () {
       climateHistory = [];
       saveClimateHistory();
+      climateDateInput.value = getLatestClimateDateKey();
       renderClimateHistory();
+    });
+
+    climateDateInput.addEventListener("change", function () {
+      renderHourlyClimateTable();
+      renderWeeklyClimateSummary();
+    });
+
+    downloadClimateCsvBtn.addEventListener("click", function () {
+      downloadClimateCsv();
     });
 
     togglePasswordVisibilityBtn.addEventListener("click", function () {
