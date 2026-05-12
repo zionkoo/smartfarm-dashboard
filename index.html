@@ -803,7 +803,7 @@
         <div class="status-badge wet" id="humidityStatus">대기 중</div>
         <div class="status-badge neutral" id="humidityFreshness">수신 대기</div>
         <p class="timestamp" id="humidityUpdatedAt">마지막 수신: --</p>
-        <p class="meta">기준: 40 - 70% = 적정</p>
+        <p class="meta">기준: 40 - 60% = 적정</p>
         <p class="meta">토픽: <code>farm/humidity</code></p>
       </article>
 
@@ -1806,7 +1806,7 @@
       if (numericValue < 40) {
         humidityStatus.textContent = "낮음";
         humidityStatus.className = "status-badge dry";
-      } else if (numericValue > 70) {
+      } else if (numericValue > 60) {
         humidityStatus.textContent = "높음";
         humidityStatus.className = "status-badge dry";
       } else {
