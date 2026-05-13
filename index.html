@@ -790,7 +790,7 @@
         <div class="status-badge wet" id="tempStatus">대기 중</div>
         <div class="status-badge neutral" id="tempFreshness">수신 대기</div>
         <p class="timestamp" id="tempUpdatedAt">마지막 수신: --</p>
-        <p class="meta">기준: 18 - 26°C = 적정</p>
+        <p class="meta">기준: 22 - 26°C = 적정</p>
         <p class="meta">토픽: <code>farm/temp</code></p>
       </article>
 
@@ -865,7 +865,7 @@
           <button class="btn-connect" id="downloadClimateCsvBtn" type="button">CSV 다운로드</button>
           <button class="btn-clear" id="clearClimateHistoryBtn" type="button">온습도 기록 지우기</button>
         </div>
-        <p class="meta">온도와 습도는 수신 시각 기준으로 저장되며, 선택한 날짜에 대해 1시간 단위 평균으로도 정리됩니다.</p>
+        <p class="meta">온도와 습도는 현재 최신값을 기준으로 1시간마다 자동 저장되며, 선택한 날짜에 대해 1시간 단위로 정리됩니다.</p>
       </article>
 
       <article class="card chart-card">
@@ -1009,7 +1009,8 @@
       ec: "farm/ec",
       ph: "farm/ph",
       temp: "farm/temp",
-      humidity: "farm/humidity"
+      humidity: "farm/humidity",
+      history: "farm/history/#"
     };
 
     /*
@@ -1125,6 +1126,82 @@
       }
     }
 
+    function getHourBucketKey(timestamp) {
+      const date = new Date(timestamp);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const hour = String(date.getHours()).padStart(2, "0");
+      return `${year}-${month}-${day} ${hour}`;
+    }
+
+    function getHourStartTimestamp(timestamp) {
+      const date = new Date(timestamp);
+      date.setMinutes(0, 0, 0);
+      return date.getTime();
+    }
+
+    function upsertClimateHistoryEntry(entry) {
+      if (
+        !entry ||
+        typeof entry.ts !== "number" ||
+        Number.isNaN(Number(entry.temp)) ||
+        Number.isNaN(Number(entry.humidity))
+      ) {
+        return;
+      }
+
+      const normalizedEntry = {
+        ts: getHourStartTimestamp(entry.ts),
+        updatedAt: typeof entry.updatedAt === "number" ? entry.updatedAt : entry.ts,
+        temp: Number(entry.temp),
+        humidity: Number(entry.humidity)
+      };
+
+      const bucketKey = getHourBucketKey(normalizedEntry.ts);
+      const existingIndex = climateHistory.findIndex(function (item) {
+        return getHourBucketKey(item.ts) === bucketKey;
+      });
+
+      if (existingIndex >= 0) {
+        if ((climateHistory[existingIndex].updatedAt || climateHistory[existingIndex].ts) <= normalizedEntry.updatedAt) {
+          climateHistory[existingIndex] = normalizedEntry;
+        }
+      } else {
+        climateHistory.push(normalizedEntry);
+      }
+
+      climateHistory = normalizeClimateHistory(climateHistory);
+    }
+
+    function normalizeClimateHistory(entries) {
+      const map = new Map();
+
+      entries.forEach(function (entry) {
+        if (!entry || typeof entry.ts !== "number") {
+          return;
+        }
+
+        const bucketKey = getHourBucketKey(entry.ts);
+        const hourStartTs = getHourStartTimestamp(entry.ts);
+        const previous = map.get(bucketKey);
+        const nextEntry = {
+          ts: hourStartTs,
+          updatedAt: typeof entry.updatedAt === "number" ? entry.updatedAt : entry.ts,
+          temp: Number(entry.temp),
+          humidity: Number(entry.humidity)
+        };
+
+        if (!previous || nextEntry.updatedAt >= previous.updatedAt) {
+          map.set(bucketKey, nextEntry);
+        }
+      });
+
+      return Array.from(map.values()).sort(function (a, b) {
+        return a.ts - b.ts;
+      });
+    }
+
     function loadClimateHistory() {
       try {
         const raw = localStorage.getItem(CLIMATE_HISTORY_KEY);
@@ -1134,9 +1211,7 @@
           return [];
         }
 
-        return parsed.filter(function (entry) {
-          return entry && typeof entry.ts === "number";
-        });
+        return normalizeClimateHistory(parsed);
       } catch (error) {
         console.error("climate history load failed:", error);
         return [];
@@ -1145,6 +1220,7 @@
 
     function saveClimateHistory() {
       try {
+        climateHistory = normalizeClimateHistory(climateHistory);
         localStorage.setItem(CLIMATE_HISTORY_KEY, JSON.stringify(climateHistory));
       } catch (error) {
         console.error("climate history save failed:", error);
@@ -1450,7 +1526,7 @@
         });
 
         rows.push([
-          new Date(entry.ts).toISOString(),
+          new Date(entry.updatedAt || entry.ts).toISOString(),
           dateText,
           timeText,
           Number(entry.temp).toFixed(1),
@@ -1560,19 +1636,12 @@
       }
 
       const now = Date.now();
-      const latestEntry = climateHistory[climateHistory.length - 1];
-
-      if (latestEntry && now - latestEntry.ts < 10000) {
-        latestEntry.ts = now;
-        latestEntry.temp = currentClimate.temp;
-        latestEntry.humidity = currentClimate.humidity;
-      } else {
-        climateHistory.push({
-          ts: now,
-          temp: currentClimate.temp,
-          humidity: currentClimate.humidity
-        });
-      }
+      upsertClimateHistoryEntry({
+        ts: now,
+        updatedAt: now,
+        temp: currentClimate.temp,
+        humidity: currentClimate.humidity
+      });
 
       if (climateHistory.length > MAX_CLIMATE_POINTS) {
         climateHistory = climateHistory.slice(climateHistory.length - MAX_CLIMATE_POINTS);
@@ -1777,7 +1846,7 @@
         return;
       }
 
-      if (numericValue < 18) {
+      if (numericValue < 22) {
         tempStatus.textContent = "낮음";
         tempStatus.className = "status-badge dry";
       } else if (numericValue > 26) {
@@ -1952,6 +2021,12 @@
           console.error("humidity topic subscribe failed:", error);
         }
       });
+
+      client.subscribe(topics.history, function (error) {
+        if (error) {
+          console.error("history topic subscribe failed:", error);
+        }
+      });
     }
 
     /*
@@ -2062,6 +2137,17 @@
 
         if (topic === topics.humidity) {
           updateHumidityUI(message);
+        }
+
+        if (topic.startsWith("farm/history/")) {
+          try {
+            const parsed = JSON.parse(message);
+            upsertClimateHistoryEntry(parsed);
+            saveClimateHistory();
+            renderClimateHistory();
+          } catch (error) {
+            console.error("history payload parse failed:", error);
+          }
         }
       });
 
@@ -2247,6 +2333,9 @@
     updateFreshnessUI("humidity");
     updateDataStatus();
     renderClimateHistory();
+    setInterval(function () {
+      pushClimateHistoryPoint();
+    }, 60000);
     setInterval(function () {
       updateFreshnessUI("soil");
       updateFreshnessUI("pump");
