@@ -1,0 +1,24 @@
+{
+  "name": "Zionkoo SmartFarm Dashboard",
+  "short_name": "SmartFarm",
+  "description": "온습도, 토양 수분, 펌프 상태를 확인하고 제어하는 스마트팜 대시보드",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef7ea",
+  "theme_color": "#2d6a4f",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

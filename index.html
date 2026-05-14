@@ -4,6 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Zionkoo's SmartFarm Dashboard</title>
+  <meta name="theme-color" content="#2d6a4f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="SmartFarm" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.svg" />
 
   <!--
     Chart.js: 실시간 토양 수분 그래프를 그리기 위한 라이브러리
@@ -266,6 +273,21 @@
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     }
 
+    .install-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 18px;
+      align-items: center;
+    }
+
+    .install-hint {
+      color: #f7fff7;
+      font-weight: 700;
+      line-height: 1.5;
+      font-size: 0.95rem;
+    }
+
     .controls {
       display: flex;
       flex-wrap: wrap;
@@ -381,6 +403,11 @@
     .btn-clear {
       background: #e9efe9;
       color: var(--text-main);
+    }
+
+    .btn-install {
+      background: linear-gradient(135deg, #ffffff, #e9f3e8);
+      color: var(--accent);
     }
 
     .btn-test {
@@ -710,6 +737,10 @@
         <span class="connection-pill">브로커: <strong id="brokerLabel">연결 준비 중</strong></span>
         <span class="connection-pill">상태: <strong id="connectionStatus">Disconnected</strong></span>
       </div>
+      <div class="install-row">
+        <button class="btn-install" id="installAppBtn" type="button" hidden>홈 화면에 설치</button>
+        <span class="install-hint" id="installHint">휴대폰 브라우저 메뉴에서 홈 화면에 추가하면 앱처럼 사용할 수 있습니다.</span>
+      </div>
     </section>
 
     <section class="grid">
@@ -1026,6 +1057,8 @@
     */
     const brokerLabel = document.getElementById("brokerLabel");
     const connectionStatus = document.getElementById("connectionStatus");
+    const installAppBtn = document.getElementById("installAppBtn");
+    const installHint = document.getElementById("installHint");
     const soilValue = document.getElementById("soilValue");
     const soilStatus = document.getElementById("soilStatus");
     const soilFreshness = document.getElementById("soilFreshness");
@@ -1107,10 +1140,31 @@
       humidity: null
     };
     let climateHistory = loadClimateHistory();
+    let deferredInstallPrompt = null;
 
     function hasAnyRecentSensorData() {
       return Object.values(lastSeenAt).some(Boolean);
     }
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("./sw.js").catch(function (error) {
+          console.error("service worker register failed:", error);
+        });
+      });
+    }
+
+    window.addEventListener("beforeinstallprompt", function (event) {
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      installAppBtn.hidden = false;
+      installHint.textContent = "설치 버튼을 누르면 홈 화면에 스마트팜 대시보드를 앱처럼 추가할 수 있습니다.";
+    });
+
+    window.addEventListener("appinstalled", function () {
+      installAppBtn.hidden = true;
+      installHint.textContent = "스마트팜 대시보드가 설치되었습니다.";
+    });
 
     /*
       저장된 로그인 정보가 있으면 불러옵니다.
@@ -2316,6 +2370,18 @@
 
     rememberLoginCheckbox.addEventListener("change", function () {
       updateLoginSummary();
+    });
+
+    installAppBtn.addEventListener("click", async function () {
+      if (!deferredInstallPrompt) {
+        installHint.textContent = "브라우저 메뉴에서 홈 화면에 추가를 눌러 설치할 수 있습니다.";
+        return;
+      }
+
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      installAppBtn.hidden = true;
     });
 
     /*
