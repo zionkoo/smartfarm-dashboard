@@ -6,9 +6,9 @@
   <title>Zionkoo's SmartFarm Dashboard</title>
   <meta name="theme-color" content="#2d6a4f" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="SmartFarm" />
-  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="manifest" id="manifestLink" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.svg" />
 
@@ -52,6 +52,11 @@
       min-height: 100vh;
       position: relative;
       overflow-x: hidden;
+    }
+
+    body.standalone {
+      padding-top: env(safe-area-inset-top, 0);
+      padding-bottom: env(safe-area-inset-bottom, 0);
     }
 
     body::before,
@@ -286,6 +291,10 @@
       font-weight: 700;
       line-height: 1.5;
       font-size: 0.95rem;
+    }
+
+    .install-row.is-hidden {
+      display: none;
     }
 
     .controls {
@@ -1059,6 +1068,7 @@
     const connectionStatus = document.getElementById("connectionStatus");
     const installAppBtn = document.getElementById("installAppBtn");
     const installHint = document.getElementById("installHint");
+    const manifestLink = document.getElementById("manifestLink");
     const soilValue = document.getElementById("soilValue");
     const soilStatus = document.getElementById("soilStatus");
     const soilFreshness = document.getElementById("soilFreshness");
@@ -1145,6 +1155,46 @@
     function hasAnyRecentSensorData() {
       return Object.values(lastSeenAt).some(Boolean);
     }
+
+    function isStandaloneMode() {
+      return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    }
+
+    if (isStandaloneMode()) {
+      document.body.classList.add("standalone");
+      installAppBtn.parentElement.classList.add("is-hidden");
+    }
+
+    (function updateManifestWithCurrentUrl() {
+      const manifest = {
+        name: "Zionkoo SmartFarm Dashboard",
+        short_name: "SmartFarm",
+        description: "온습도, 토양 수분, 펌프 상태를 확인하고 제어하는 스마트팜 대시보드",
+        start_url: window.location.pathname + window.location.search,
+        scope: "./",
+        display: "standalone",
+        orientation: "portrait",
+        background_color: "#eef7ea",
+        theme_color: "#2d6a4f",
+        icons: [
+          {
+            src: "./icon.svg",
+            sizes: "any",
+            type: "image/svg+xml",
+            purpose: "any"
+          },
+          {
+            src: "./icon-maskable.svg",
+            sizes: "any",
+            type: "image/svg+xml",
+            purpose: "maskable"
+          }
+        ]
+      };
+
+      const blob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
+      manifestLink.href = URL.createObjectURL(blob);
+    })();
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
