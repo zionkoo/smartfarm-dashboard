@@ -191,6 +191,10 @@
       grid-column: span 12;
     }
 
+    .alert-card {
+      grid-column: span 8;
+    }
+
     .guide-card {
       grid-column: span 12;
     }
@@ -315,7 +319,7 @@
 
     .mobile-nav-list {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 8px;
     }
 
@@ -695,6 +699,45 @@
       background: #7b8f85;
     }
 
+    .alert-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 16px 0 14px;
+    }
+
+    .alert-item {
+      padding: 16px 18px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #f4f8ef, #ffffff);
+      border: 1px solid rgba(23, 59, 45, 0.08);
+    }
+
+    .alert-item-label {
+      font-size: 0.9rem;
+      color: var(--text-soft);
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    .alert-item-value {
+      font-size: 1.05rem;
+      color: var(--text-main);
+      font-weight: 800;
+      line-height: 1.5;
+    }
+
+    .alert-note {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: #f7fbf4;
+      color: var(--text-soft);
+      font-weight: 700;
+      line-height: 1.6;
+      border: 1px solid rgba(23, 59, 45, 0.08);
+    }
+
     .help-banner {
       margin-top: 14px;
       padding: 14px 16px;
@@ -732,6 +775,7 @@
       }
 
       .settings-card,
+      .alert-card,
       .chart-card,
       .guide-card {
         grid-column: span 6;
@@ -754,6 +798,7 @@
       .metric-card,
       .control-card,
       .settings-card,
+      .alert-card,
       .chart-card,
       .guide-card {
         grid-column: span 12;
@@ -776,6 +821,10 @@
       }
 
       .weekly-summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .alert-grid {
         grid-template-columns: 1fr;
       }
 
@@ -897,6 +946,40 @@
         <p class="timestamp" id="humidityUpdatedAt">마지막 수신: --</p>
         <p class="meta">기준: 40 - 60% = 적정</p>
         <p class="meta">토픽: <code>farm/humidity</code></p>
+      </article>
+
+      <article class="card alert-card" id="alertSection">
+        <h2 class="card-title">알림 상태</h2>
+        <div class="status-panel">
+          <div class="status-panel-head">
+            <span class="status-panel-title">현재 스마트팜 경고 요약</span>
+            <div class="status-display waiting" id="alertOverallStatus">대기 중</div>
+          </div>
+          <div class="help-banner" id="alertSummaryText">
+            온도와 습도 데이터가 들어오면 현재 경고 상태를 여기서 바로 확인할 수 있습니다.
+          </div>
+        </div>
+        <div class="alert-grid">
+          <div class="alert-item">
+            <div class="alert-item-label">온도 상태</div>
+            <div class="alert-item-value" id="alertTempDetail">데이터 대기</div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-item-label">습도 상태</div>
+            <div class="alert-item-value" id="alertHumidityDetail">데이터 대기</div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-item-label">마지막 이상 감지</div>
+            <div class="alert-item-value" id="alertLastTriggeredAt">--</div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-item-label">알림 운영</div>
+            <div class="alert-item-value" id="alertDeliveryMode">Node-RED 텔레그램 1시간 알림 사용 중</div>
+          </div>
+        </div>
+        <p class="alert-note">
+          대시보드는 현재 수신한 온도와 습도 기준으로 경고를 표시합니다. 실제 텔레그램 발송은 Node-RED 설정 기준으로 동작합니다.
+        </p>
       </article>
 
       <article class="card history-card" id="historySection">
@@ -1056,6 +1139,10 @@
         <span class="mobile-nav-icon">🌿</span>
         <span>상태</span>
       </a>
+      <a class="mobile-nav-link" href="#alertSection" data-target="alertSection">
+        <span class="mobile-nav-icon">🔔</span>
+        <span>알림</span>
+      </a>
       <a class="mobile-nav-link" href="#historySection" data-target="historySection">
         <span class="mobile-nav-icon">📈</span>
         <span>기록</span>
@@ -1204,9 +1291,15 @@
     const clearClimateHistoryBtn = document.getElementById("clearClimateHistoryBtn");
     const statusDisplay = document.getElementById("statusDisplay");
     const dataStatusDisplay = document.getElementById("dataStatusDisplay");
+    const alertOverallStatus = document.getElementById("alertOverallStatus");
+    const alertSummaryText = document.getElementById("alertSummaryText");
+    const alertTempDetail = document.getElementById("alertTempDetail");
+    const alertHumidityDetail = document.getElementById("alertHumidityDetail");
+    const alertLastTriggeredAt = document.getElementById("alertLastTriggeredAt");
     const loginHelpBanner = document.getElementById("loginHelpBanner");
     const STORAGE_KEY = "smartfarm-dashboard-login";
     const CLIMATE_HISTORY_KEY = "smartfarm-dashboard-climate-history";
+    const ALERT_STATE_KEY = "smartfarm-dashboard-alert-state";
     const STALE_WARNING_MS = 30000;
     const STALE_DELAY_MS = 90000;
     const MAX_CLIMATE_POINTS = 288;
@@ -1223,6 +1316,7 @@
       temp: null,
       humidity: null
     };
+    const alertState = loadAlertState();
     let climateHistory = loadClimateHistory();
     let deferredInstallPrompt = null;
 
@@ -1325,6 +1419,31 @@
       } catch (error) {
         console.error("saved login load failed:", error);
         return null;
+      }
+    }
+
+    function loadAlertState() {
+      try {
+        const raw = localStorage.getItem(ALERT_STATE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return {
+          lastTriggeredAt: typeof parsed?.lastTriggeredAt === "number" ? parsed.lastTriggeredAt : null,
+          activeSignature: typeof parsed?.activeSignature === "string" ? parsed.activeSignature : null
+        };
+      } catch (error) {
+        console.error("alert state load failed:", error);
+        return {
+          lastTriggeredAt: null,
+          activeSignature: null
+        };
+      }
+    }
+
+    function saveAlertState() {
+      try {
+        localStorage.setItem(ALERT_STATE_KEY, JSON.stringify(alertState));
+      } catch (error) {
+        console.error("alert state save failed:", error);
       }
     }
 
@@ -1661,6 +1780,118 @@
         minute: "2-digit",
         second: "2-digit"
       });
+    }
+
+    function getTempAlertInfo() {
+      const value = Number(currentClimate.temp);
+
+      if (Number.isNaN(value)) {
+        return {
+          level: "waiting",
+          text: "데이터 대기"
+        };
+      }
+
+      if (value < 22) {
+        return {
+          level: "alert",
+          text: `${value.toFixed(1)} °C · 낮음`
+        };
+      }
+
+      if (value > 26) {
+        return {
+          level: "alert",
+          text: `${value.toFixed(1)} °C · 높음`
+        };
+      }
+
+      return {
+        level: "normal",
+        text: `${value.toFixed(1)} °C · 적정`
+      };
+    }
+
+    function getHumidityAlertInfo() {
+      const value = Number(currentClimate.humidity);
+
+      if (Number.isNaN(value)) {
+        return {
+          level: "waiting",
+          text: "데이터 대기"
+        };
+      }
+
+      if (value < 40) {
+        return {
+          level: "alert",
+          text: `${value.toFixed(1)} % · 낮음`
+        };
+      }
+
+      if (value > 60) {
+        return {
+          level: "alert",
+          text: `${value.toFixed(1)} % · 높음`
+        };
+      }
+
+      return {
+        level: "normal",
+        text: `${value.toFixed(1)} % · 적정`
+      };
+    }
+
+    function refreshAlertUI() {
+      const tempInfo = getTempAlertInfo();
+      const humidityInfo = getHumidityAlertInfo();
+      const hasWaiting = tempInfo.level === "waiting" || humidityInfo.level === "waiting";
+      const hasAlert = tempInfo.level === "alert" || humidityInfo.level === "alert";
+      const alertSignature = `${tempInfo.level}:${tempInfo.text}|${humidityInfo.level}:${humidityInfo.text}`;
+
+      alertTempDetail.textContent = tempInfo.text;
+      alertHumidityDetail.textContent = humidityInfo.text;
+      alertLastTriggeredAt.textContent = formatSavedDateTime(alertState.lastTriggeredAt);
+
+      if (hasAlert) {
+        if (alertState.activeSignature !== alertSignature) {
+          alertState.lastTriggeredAt = Date.now();
+          alertState.activeSignature = alertSignature;
+          saveAlertState();
+          alertLastTriggeredAt.textContent = formatSavedDateTime(alertState.lastTriggeredAt);
+        }
+
+        alertOverallStatus.textContent = tempInfo.level === "alert" && humidityInfo.level === "alert"
+          ? "복합 경고"
+          : tempInfo.level === "alert"
+            ? "온도 경고"
+            : "습도 경고";
+        alertOverallStatus.className = "status-display failed";
+        alertSummaryText.textContent = "적정 범위를 벗어난 값이 감지되어 있습니다. Node-RED 텔레그램 알림 조건과 함께 확인해보세요.";
+        alertSummaryText.className = "help-banner error";
+        return;
+      }
+
+      if (hasWaiting) {
+        if (alertState.activeSignature !== null) {
+          alertState.activeSignature = null;
+          saveAlertState();
+        }
+        alertOverallStatus.textContent = "대기 중";
+        alertOverallStatus.className = "status-display waiting";
+        alertSummaryText.textContent = "온도와 습도 데이터가 들어오면 현재 경고 상태를 여기서 바로 확인할 수 있습니다.";
+        alertSummaryText.className = "help-banner";
+        return;
+      }
+
+      if (alertState.activeSignature !== null) {
+        alertState.activeSignature = null;
+        saveAlertState();
+      }
+      alertOverallStatus.textContent = "정상";
+      alertOverallStatus.className = "status-display connected";
+      alertSummaryText.textContent = "현재 온도와 습도가 모두 적정 범위 안에 있습니다. 텔레그램 알림은 이상 상태가 생길 때만 동작합니다.";
+      alertSummaryText.className = "help-banner success";
     }
 
     function getLocalDateKey(timestamp) {
@@ -2045,6 +2276,7 @@
       if (Number.isNaN(numericValue)) {
         tempStatus.textContent = "확인 필요";
         tempStatus.className = "status-badge dry";
+        refreshAlertUI();
         return;
       }
 
@@ -2059,6 +2291,7 @@
         tempStatus.className = "status-badge wet";
       }
 
+      refreshAlertUI();
       pushClimateHistoryPoint();
     }
 
@@ -2071,6 +2304,7 @@
       if (Number.isNaN(numericValue)) {
         humidityStatus.textContent = "확인 필요";
         humidityStatus.className = "status-badge dry";
+        refreshAlertUI();
         return;
       }
 
@@ -2085,6 +2319,7 @@
         humidityStatus.className = "status-badge wet";
       }
 
+      refreshAlertUI();
       pushClimateHistoryPoint();
     }
 
@@ -2552,6 +2787,7 @@
     updateFreshnessUI("temp");
     updateFreshnessUI("humidity");
     updateDataStatus();
+    refreshAlertUI();
     renderClimateHistory();
     updateActiveMobileNav();
     window.addEventListener("scroll", updateActiveMobileNav, { passive: true });
