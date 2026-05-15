@@ -297,6 +297,53 @@
       display: none;
     }
 
+    .mobile-nav {
+      display: none;
+      position: fixed;
+      left: 50%;
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      transform: translateX(-50%);
+      width: min(94vw, 460px);
+      padding: 10px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 18px 40px rgba(23, 59, 45, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      z-index: 20;
+    }
+
+    .mobile-nav-list {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .mobile-nav-link {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      min-height: 56px;
+      text-decoration: none;
+      color: var(--text-soft);
+      font-size: 0.8rem;
+      font-weight: 800;
+      border-radius: 16px;
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    }
+
+    .mobile-nav-link.is-active {
+      background: linear-gradient(135deg, #e8f4e6, #fdf8dc);
+      color: var(--accent);
+    }
+
+    .mobile-nav-icon {
+      font-size: 1.2rem;
+      line-height: 1;
+    }
+
     .controls {
       display: flex;
       flex-wrap: wrap;
@@ -695,6 +742,7 @@
       .dashboard {
         width: min(100% - 20px, 1100px);
         padding-top: 18px;
+        padding-bottom: 112px;
       }
 
       .hero,
@@ -730,12 +778,16 @@
       .weekly-summary-grid {
         grid-template-columns: 1fr;
       }
+
+      .mobile-nav {
+        display: block;
+      }
     }
   </style>
 </head>
 <body>
   <main class="dashboard">
-    <section class="hero">
+    <section class="hero" id="overviewSection">
       <h1>Zionkoo's SmartFarm Dashboard</h1>
       <p>
         MQTT WebSocket으로 들어오는 스마트팜 센서 데이터를 실시간으로 보여주는 대시보드입니다.
@@ -770,7 +822,7 @@
         <p class="meta">기준: 500 이하 = 건조, 500 초과 = 정상</p>
       </article>
 
-      <article class="card control-card">
+      <article class="card control-card" id="controlSection">
         <h2 class="card-title">펌프 상태</h2>
         <div class="pump-state" id="pumpState">--</div>
         <div class="status-badge neutral" id="pumpFreshness">수신 대기</div>
@@ -847,7 +899,7 @@
         <p class="meta">토픽: <code>farm/humidity</code></p>
       </article>
 
-      <article class="card history-card">
+      <article class="card history-card" id="historySection">
         <h2 class="card-title">온도 · 습도 시간대별 기록</h2>
         <div class="history-summary">
           <div class="summary-pill">저장 개수 <strong id="climateRecordCount">0개</strong></div>
@@ -916,7 +968,7 @@
         <p class="meta">최근 데이터 20개 이상을 유지하면서 시간 흐름에 따라 갱신됩니다.</p>
       </article>
 
-      <article class="card settings-card">
+      <article class="card settings-card" id="settingsSection">
         <h2 class="card-title">HiveMQ 연결 정보</h2>
         <div class="login-summary">
           <div class="summary-pill">현재 계정 <strong id="activeUsernameLabel">zionkoo3</strong></div>
@@ -998,6 +1050,27 @@
     </section>
   </main>
 
+  <nav class="mobile-nav" aria-label="모바일 빠른 메뉴">
+    <div class="mobile-nav-list">
+      <a class="mobile-nav-link is-active" href="#overviewSection" data-target="overviewSection">
+        <span class="mobile-nav-icon">🌿</span>
+        <span>상태</span>
+      </a>
+      <a class="mobile-nav-link" href="#historySection" data-target="historySection">
+        <span class="mobile-nav-icon">📈</span>
+        <span>기록</span>
+      </a>
+      <a class="mobile-nav-link" href="#controlSection" data-target="controlSection">
+        <span class="mobile-nav-icon">💧</span>
+        <span>제어</span>
+      </a>
+      <a class="mobile-nav-link" href="#settingsSection" data-target="settingsSection">
+        <span class="mobile-nav-icon">⚙️</span>
+        <span>설정</span>
+      </a>
+    </div>
+  </nav>
+
   <script>
     /*
       ================================
@@ -1069,6 +1142,7 @@
     const installAppBtn = document.getElementById("installAppBtn");
     const installHint = document.getElementById("installHint");
     const manifestLink = document.getElementById("manifestLink");
+    const mobileNavLinks = Array.from(document.querySelectorAll(".mobile-nav-link"));
     const soilValue = document.getElementById("soilValue");
     const soilStatus = document.getElementById("soilStatus");
     const soilFreshness = document.getElementById("soilFreshness");
@@ -1154,6 +1228,30 @@
 
     function hasAnyRecentSensorData() {
       return Object.values(lastSeenAt).some(Boolean);
+    }
+
+    function updateActiveMobileNav() {
+      const sections = mobileNavLinks
+        .map(function (link) {
+          const id = link.dataset.target;
+          return { link, element: document.getElementById(id) };
+        })
+        .filter(function (item) {
+          return item.element;
+        });
+
+      let active = sections[0];
+      const offset = window.scrollY + 140;
+
+      sections.forEach(function (item) {
+        if (item.element.offsetTop <= offset) {
+          active = item;
+        }
+      });
+
+      mobileNavLinks.forEach(function (link) {
+        link.classList.toggle("is-active", active && active.link === link);
+      });
     }
 
     function isStandaloneMode() {
@@ -2434,6 +2532,12 @@
       installAppBtn.hidden = true;
     });
 
+    mobileNavLinks.forEach(function (link) {
+      link.addEventListener("click", function () {
+        setTimeout(updateActiveMobileNav, 150);
+      });
+    });
+
     /*
       첫 로딩 시 기본 상태
     */
@@ -2449,6 +2553,8 @@
     updateFreshnessUI("humidity");
     updateDataStatus();
     renderClimateHistory();
+    updateActiveMobileNav();
+    window.addEventListener("scroll", updateActiveMobileNav, { passive: true });
     setInterval(function () {
       pushClimateHistoryPoint();
     }, 60000);
