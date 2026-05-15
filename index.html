@@ -41,6 +41,12 @@
       box-sizing: border-box;
     }
 
+    html,
+    body {
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
     body {
       margin: 0;
       font-family: "Segoe UI", "Apple SD Gothic Neo", sans-serif;
@@ -276,10 +282,19 @@
     }
 
     .connection-pill {
+      max-width: 100%;
       padding: 10px 14px;
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.18);
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+
+    .connection-pill strong {
+      display: inline-block;
+      max-width: 100%;
+      vertical-align: middle;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .install-row {
@@ -792,6 +807,19 @@
       .hero,
       .card {
         padding: 18px;
+      }
+
+      .connection {
+        align-items: stretch;
+      }
+
+      .connection-pill {
+        width: 100%;
+        border-radius: 22px;
+      }
+
+      .connection-pill strong {
+        max-width: 100%;
       }
 
       .card,
@@ -1783,6 +1811,13 @@
     }
 
     function getTempAlertInfo() {
+      if (currentClimate.temp === null || currentClimate.temp === undefined || currentClimate.temp === "") {
+        return {
+          level: "waiting",
+          text: "데이터 대기"
+        };
+      }
+
       const value = Number(currentClimate.temp);
 
       if (Number.isNaN(value)) {
@@ -1813,6 +1848,13 @@
     }
 
     function getHumidityAlertInfo() {
+      if (currentClimate.humidity === null || currentClimate.humidity === undefined || currentClimate.humidity === "") {
+        return {
+          level: "waiting",
+          text: "데이터 대기"
+        };
+      }
+
       const value = Number(currentClimate.humidity);
 
       if (Number.isNaN(value)) {
