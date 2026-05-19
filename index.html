@@ -316,6 +316,10 @@
       display: none;
     }
 
+    .is-hidden {
+      display: none !important;
+    }
+
     .mobile-nav {
       display: none;
       position: fixed;
@@ -872,7 +876,6 @@
       </p>
 
       <div class="connection">
-        <span class="connection-pill">브로커: <strong id="brokerLabel">연결 준비 중</strong></span>
         <span class="connection-pill">상태: <strong id="connectionStatus">Disconnected</strong></span>
       </div>
       <div class="install-row">
@@ -1002,7 +1005,7 @@
           </div>
           <div class="alert-item">
             <div class="alert-item-label">알림 운영</div>
-            <div class="alert-item-value" id="alertDeliveryMode">Node-RED 텔레그램 1시간 알림 사용 중</div>
+            <div class="alert-item-value" id="alertDeliveryMode">Node-RED 텔레그램 1시간 알림 사용 중 / 적정 온도 이상 및 이하시 알림 사용 중</div>
           </div>
         </div>
         <p class="alert-note">
@@ -1051,7 +1054,10 @@
             <div class="daily-summary-value" id="climateWeeklyHumiditySummary">-</div>
           </div>
         </div>
-        <div class="hourly-table-wrap">
+        <div class="history-actions">
+          <button class="btn-clear" id="toggleHourlyTableBtn" type="button">시간대별 기록 펼쳐보기</button>
+        </div>
+        <div class="hourly-table-wrap is-hidden" id="hourlyTableWrap">
           <table class="hourly-table">
             <thead>
               <tr>
@@ -1099,10 +1105,7 @@
           </div>
         </div>
         <div class="form-grid">
-          <div class="field">
-            <label for="hostInput">Broker Host</label>
-            <input id="hostInput" type="text" placeholder="mqtt.example.com" />
-          </div>
+          <input id="hostInput" type="hidden" />
           <div class="field">
             <label for="portInput">WebSocket Port</label>
             <input id="portInput" type="number" placeholder="8884" />
@@ -1252,7 +1255,6 @@
       화면에 자주 쓰는 요소들을 미리 찾아둡니다.
       이렇게 하면 코드가 읽기 쉬워집니다.
     */
-    const brokerLabel = document.getElementById("brokerLabel");
     const connectionStatus = document.getElementById("connectionStatus");
     const installAppBtn = document.getElementById("installAppBtn");
     const installHint = document.getElementById("installHint");
@@ -1310,6 +1312,8 @@
     const climateDateInput = document.getElementById("climateDateInput");
     const climateDayCount = document.getElementById("climateDayCount");
     const climateHourlyRows = document.getElementById("climateHourlyRows");
+    const hourlyTableWrap = document.getElementById("hourlyTableWrap");
+    const toggleHourlyTableBtn = document.getElementById("toggleHourlyTableBtn");
     const climateTempSummary = document.getElementById("climateTempSummary");
     const climateHumiditySummary = document.getElementById("climateHumiditySummary");
     const climateDateSummary = document.getElementById("climateDateSummary");
@@ -1347,9 +1351,16 @@
     const alertState = loadAlertState();
     let climateHistory = loadClimateHistory();
     let deferredInstallPrompt = null;
+    let isHourlyTableVisible = false;
 
     function hasAnyRecentSensorData() {
       return Object.values(lastSeenAt).some(Boolean);
+    }
+
+    function setHourlyTableVisibility(visible) {
+      isHourlyTableVisible = visible;
+      hourlyTableWrap.classList.toggle("is-hidden", !visible);
+      toggleHourlyTableBtn.textContent = visible ? "시간대별 기록 접기" : "시간대별 기록 펼쳐보기";
     }
 
     function updateActiveMobileNav() {
@@ -1623,12 +1634,6 @@
     passwordInput.value = savedLogin?.password || "";
     rememberLoginCheckbox.checked = Boolean(savedLogin);
     updateLoginSummary(savedLogin ? "저장됨" : "미저장");
-
-    /*
-      브로커 주소 표시용 문자열을 만들어 상단에 보여줍니다.
-    */
-    const protocol = mqttConfig.useSSL ? "wss" : "ws";
-    brokerLabel.textContent = `${protocol}://${mqttConfig.host}:${mqttConfig.port}${mqttConfig.path}`;
 
     /*
       2. 차트 초기화
@@ -2449,15 +2454,6 @@
     }
 
     /*
-      화면 상단 브로커 표시도 입력값 기준으로 갱신합니다.
-    */
-    function updateBrokerLabel() {
-      brokerLabel.textContent = getBrokerUrl();
-    }
-
-    updateBrokerLabel();
-
-    /*
       버튼은 연결되었을 때만 누를 수 있게 합니다.
     */
     function togglePumpButtons(isConnected) {
@@ -2578,7 +2574,6 @@
       setLoginHelp("브로커에 연결 중입니다. 잠시만 기다려주세요.", "");
       togglePumpButtons(false);
       toggleConnectButton(true);
-      updateBrokerLabel();
 
       if (rememberLoginCheckbox.checked) {
         saveLoginToBrowser();
@@ -2807,6 +2802,10 @@
       renderWeeklyClimateSummary();
     });
 
+    toggleHourlyTableBtn.addEventListener("click", function () {
+      setHourlyTableVisibility(!isHourlyTableVisible);
+    });
+
     downloadClimateCsvBtn.addEventListener("click", function () {
       downloadClimateCsv();
     });
@@ -2857,6 +2856,7 @@
     updateFreshnessUI("temp");
     updateFreshnessUI("humidity");
     updateDataStatus();
+    setHourlyTableVisibility(false);
     refreshAlertUI();
     renderClimateHistory();
     updateActiveMobileNav();
