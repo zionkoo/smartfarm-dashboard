@@ -962,7 +962,7 @@
         <div class="status-badge wet" id="tempStatus">대기 중</div>
         <div class="status-badge neutral" id="tempFreshness">수신 대기</div>
         <p class="timestamp" id="tempUpdatedAt">마지막 수신: --</p>
-        <p class="meta">기준: 22 - 26°C = 적정</p>
+        <p class="meta">기준: 23 - 26°C = 적정 / 26.1°C 이상 = 주의 / 28°C 이상 = 경고</p>
         <p class="meta">토픽: <code>farm/temp</code></p>
       </article>
 
@@ -1852,17 +1852,24 @@
         };
       }
 
-      if (value < 22) {
+      if (value < 23) {
         return {
           level: "alert",
           text: `${value.toFixed(1)} °C · 낮음`
         };
       }
 
-      if (value > 26) {
+      if (value >= 28) {
         return {
           level: "alert",
-          text: `${value.toFixed(1)} °C · 높음`
+          text: `${value.toFixed(1)} °C · 경고`
+        };
+      }
+
+      if (value > 26) {
+        return {
+          level: "caution",
+          text: `${value.toFixed(1)} °C · 주의`
         };
       }
 
@@ -1914,6 +1921,7 @@
       const humidityInfo = getHumidityAlertInfo();
       const hasWaiting = tempInfo.level === "waiting" || humidityInfo.level === "waiting";
       const hasAlert = tempInfo.level === "alert" || humidityInfo.level === "alert";
+      const hasCaution = tempInfo.level === "caution" || humidityInfo.level === "caution";
       const alertSignature = `${tempInfo.level}:${tempInfo.text}|${humidityInfo.level}:${humidityInfo.text}`;
 
       alertTempDetail.textContent = tempInfo.text;
@@ -1936,6 +1944,21 @@
         alertOverallStatus.className = "status-display failed";
         alertSummaryText.textContent = "적정 범위를 벗어난 값이 감지되어 있습니다. Node-RED 텔레그램 알림 조건과 함께 확인해보세요.";
         alertSummaryText.className = "help-banner error";
+        return;
+      }
+
+      if (hasCaution) {
+        if (alertState.activeSignature !== alertSignature) {
+          alertState.lastTriggeredAt = Date.now();
+          alertState.activeSignature = alertSignature;
+          saveAlertState();
+          alertLastTriggeredAt.textContent = formatSavedDateTime(alertState.lastTriggeredAt);
+        }
+
+        alertOverallStatus.textContent = tempInfo.level === "caution" ? "온도 주의" : "주의";
+        alertOverallStatus.className = "status-display connecting";
+        alertSummaryText.textContent = "적정 범위를 조금 벗어난 값이 감지되었습니다. 온도와 습도 추이를 한 번 더 확인해보세요.";
+        alertSummaryText.className = "help-banner";
         return;
       }
 
@@ -2351,12 +2374,15 @@
       markLastSeen("temp");
       currentClimate.temp = numericValue;
 
-      if (numericValue < 22) {
+      if (numericValue < 23) {
         tempStatus.textContent = "낮음";
         tempStatus.className = "status-badge dry";
-      } else if (numericValue > 26) {
-        tempStatus.textContent = "높음";
+      } else if (numericValue >= 28) {
+        tempStatus.textContent = "경고";
         tempStatus.className = "status-badge dry";
+      } else if (numericValue > 26) {
+        tempStatus.textContent = "주의";
+        tempStatus.className = "status-badge caution";
       } else {
         tempStatus.textContent = "적정";
         tempStatus.className = "status-badge wet";
