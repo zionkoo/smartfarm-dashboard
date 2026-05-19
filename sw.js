@@ -1,4 +1,4 @@
-const CACHE_NAME = "smartfarm-dashboard-v2";
+const CACHE_NAME = "smartfarm-dashboard-v3";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -32,6 +32,31 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") {
+    return;
+  }
+
+  const requestUrl = new URL(event.request.url);
+  const isSameOrigin = requestUrl.origin === self.location.origin;
+  const isAppShellRequest =
+    event.request.mode === "navigate" ||
+    (isSameOrigin &&
+      (requestUrl.pathname.endsWith("/") ||
+        requestUrl.pathname.endsWith("/index.html") ||
+        requestUrl.pathname.endsWith("/manifest.webmanifest")));
+
+  if (isAppShellRequest) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+
+          return response;
+        })
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./index.html")))
+    );
     return;
   }
 

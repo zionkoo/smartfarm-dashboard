@@ -1810,6 +1810,26 @@
       });
     }
 
+    function normalizeScalarPayload(value) {
+      if (value === null || value === undefined) {
+        return null;
+      }
+
+      const text = String(value).trim();
+
+      if (
+        !text ||
+        text === "--" ||
+        text.toLowerCase() === "null" ||
+        text.toLowerCase() === "undefined" ||
+        text.toLowerCase() === "nan"
+      ) {
+        return null;
+      }
+
+      return text;
+    }
+
     function getTempAlertInfo() {
       if (currentClimate.temp === null || currentClimate.temp === undefined || currentClimate.temp === "") {
         return {
@@ -2310,17 +2330,21 @@
     }
 
     function updateTempUI(value) {
-      const numericValue = Number(value);
-      tempValue.textContent = value;
-      markLastSeen("temp");
-      currentClimate.temp = numericValue;
+      const normalizedValue = normalizeScalarPayload(value);
 
-      if (Number.isNaN(numericValue)) {
-        tempStatus.textContent = "확인 필요";
-        tempStatus.className = "status-badge dry";
-        refreshAlertUI();
+      if (normalizedValue === null) {
         return;
       }
+
+      const numericValue = Number(normalizedValue);
+
+      if (Number.isNaN(numericValue)) {
+        return;
+      }
+
+      tempValue.textContent = Number.isInteger(numericValue) ? String(numericValue) : numericValue.toFixed(1);
+      markLastSeen("temp");
+      currentClimate.temp = numericValue;
 
       if (numericValue < 22) {
         tempStatus.textContent = "낮음";
@@ -2338,17 +2362,21 @@
     }
 
     function updateHumidityUI(value) {
-      const numericValue = Number(value);
-      humidityValue.textContent = value;
-      markLastSeen("humidity");
-      currentClimate.humidity = numericValue;
+      const normalizedValue = normalizeScalarPayload(value);
 
-      if (Number.isNaN(numericValue)) {
-        humidityStatus.textContent = "확인 필요";
-        humidityStatus.className = "status-badge dry";
-        refreshAlertUI();
+      if (normalizedValue === null) {
         return;
       }
+
+      const numericValue = Number(normalizedValue);
+
+      if (Number.isNaN(numericValue)) {
+        return;
+      }
+
+      humidityValue.textContent = Number.isInteger(numericValue) ? String(numericValue) : numericValue.toFixed(1);
+      markLastSeen("humidity");
+      currentClimate.humidity = numericValue;
 
       if (numericValue < 40) {
         humidityStatus.textContent = "낮음";
