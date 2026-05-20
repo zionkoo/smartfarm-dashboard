@@ -212,31 +212,52 @@
     .overview-info-card {
       grid-column: span 12;
       min-height: auto;
+      padding: 22px;
     }
 
     .overview-info-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 14px;
-      margin-top: 14px;
+      margin-top: 12px;
+      align-items: stretch;
     }
 
     .overview-info-panel {
-      padding: 18px;
+      min-height: 200px;
+      padding: 20px;
       border-radius: 22px;
       background: linear-gradient(135deg, #f7fbf4, #ffffff);
       border: 1px solid rgba(23, 59, 45, 0.08);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
 
     .overview-info-panel .card-title {
-      margin-bottom: 10px;
+      margin-bottom: 8px;
+    }
+
+    .overview-info-panel .big-value {
+      font-size: clamp(2.1rem, 4vw, 3.4rem);
+      line-height: 1;
+    }
+
+    .overview-info-panel .value-row {
+      min-height: 76px;
+      align-items: center;
+    }
+
+    .overview-info-panel .meta {
+      margin-top: 12px;
     }
 
     .info-subvalue {
-      margin-top: 10px;
+      margin-top: 8px;
       font-size: 1rem;
       font-weight: 800;
       color: var(--text-soft);
+      line-height: 1.45;
     }
 
     .weather-meta {
@@ -846,7 +867,7 @@
       }
 
       .overview-info-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
 
@@ -907,6 +928,32 @@
 
       .alert-grid {
         grid-template-columns: 1fr;
+      }
+
+      .overview-info-card {
+        padding: 18px;
+      }
+
+      .overview-info-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .overview-info-panel {
+        min-height: 0;
+        padding: 16px;
+      }
+
+      .overview-info-panel .big-value {
+        font-size: clamp(1.9rem, 10vw, 3rem);
+      }
+
+      .overview-info-panel .value-row {
+        min-height: 0;
+      }
+
+      .overview-info-panel .meta {
+        margin-top: 10px;
       }
 
       .mobile-nav {
