@@ -100,7 +100,7 @@
     }
 
     .dashboard {
-      width: min(980px, calc(100% - 32px));
+      width: min(1320px, calc(100% - 32px));
       margin: 0 auto;
       padding: 28px 0 36px;
       position: relative;
@@ -203,6 +203,42 @@
 
     .guide-card {
       grid-column: span 12;
+    }
+
+    @media (min-width: 1180px) {
+      .metric-card,
+      .control-card {
+        grid-column: span 3;
+        min-height: 0;
+      }
+
+      .alert-card,
+      .settings-card,
+      .chart-card {
+        grid-column: span 6;
+      }
+
+      .history-card,
+      .guide-card,
+      .overview-info-card {
+        grid-column: span 12;
+      }
+
+      .card {
+        padding: 20px;
+      }
+
+      .metric-card .big-value,
+      .control-card .big-value {
+        font-size: clamp(1.9rem, 3vw, 2.8rem);
+      }
+
+      .metric-card .meta,
+      .control-card .meta,
+      .metric-card .timestamp,
+      .control-card .timestamp {
+        font-size: 0.88rem;
+      }
     }
 
     .info-card {
