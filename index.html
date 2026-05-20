@@ -727,8 +727,27 @@
     }
 
     .collapsible-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
       list-style: none;
       cursor: pointer;
+    }
+
+    .collapsible-summary-main {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .collapsible-summary-preview {
+      color: var(--text-soft);
+      font-size: 0.9rem;
+      font-weight: 800;
+      text-align: right;
+      line-height: 1.4;
     }
 
     .collapsible-summary::-webkit-details-marker {
@@ -1089,6 +1108,15 @@
         gap: 12px;
       }
 
+      .collapsible-summary {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .collapsible-summary-preview {
+        text-align: left;
+      }
+
       .overview-info-panel {
         min-height: 0;
         padding: 16px;
@@ -1299,8 +1327,13 @@
         </p>
       </article>
 
-      <article class="card history-card" id="historySection">
-        <h2 class="card-title">온도 · 습도 시간대별 기록</h2>
+      <details class="card history-card collapsible-card" id="historySection">
+        <summary class="collapsible-summary">
+          <div class="collapsible-summary-main">
+            <h2 class="card-title">온도 · 습도 시간대별 기록</h2>
+          </div>
+          <div class="collapsible-summary-preview">요약 확인 후 필요할 때 펼쳐보기</div>
+        </summary>
         <div class="history-summary">
           <div class="summary-pill">저장 개수 <strong id="climateRecordCount">0개</strong></div>
           <div class="summary-pill">마지막 저장 <strong id="climateLastSaved">--</strong></div>
@@ -1361,7 +1394,7 @@
           <button class="btn-clear" id="clearClimateHistoryBtn" type="button">온습도 기록 지우기</button>
         </div>
         <p class="meta">온도와 습도는 현재 최신값을 기준으로 1시간마다 자동 저장되며, 선택한 날짜에 대해 1시간 단위로 정리됩니다.</p>
-      </article>
+      </details>
 
       <article class="card chart-card">
         <h2 class="card-title">실시간 토양 수분 그래프</h2>
