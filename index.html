@@ -1195,14 +1195,8 @@
         </div>
         <div class="form-grid">
           <input id="hostInput" type="hidden" />
-          <div class="field">
-            <label for="portInput">WebSocket Port</label>
-            <input id="portInput" type="number" placeholder="8884" />
-          </div>
-          <div class="field">
-            <label for="pathInput">WebSocket Path</label>
-            <input id="pathInput" type="text" placeholder="/mqtt" />
-          </div>
+          <input id="portInput" type="hidden" />
+          <input id="pathInput" type="hidden" />
           <div class="field">
             <label for="usernameInput">Username</label>
             <input id="usernameInput" type="text" placeholder="zionkoo" />
@@ -1223,7 +1217,7 @@
           <input id="rememberLoginCheckbox" type="checkbox" />
           로그인 정보를 이 브라우저에 저장
         </label>
-        <p class="meta">비밀번호는 URL에 넣지 않고 페이지에서 직접 입력하는 방식을 권장합니다.</p>
+        <p class="meta">연결에 필요한 내부 주소 정보는 숨겨두고, 계정 정보만 입력하도록 구성했습니다.</p>
       </article>
 
       <article class="card guide-card">
@@ -2793,8 +2787,8 @@
       const username = usernameInput.value.trim();
       const password = passwordInput.value;
 
-      if (!host || !port) {
-        alert("Broker Host와 WebSocket Port를 입력해주세요.");
+      if (!username || !password) {
+        alert("Username과 Password를 입력해주세요.");
         return;
       }
 
