@@ -206,6 +206,10 @@
     }
 
     @media (min-width: 1180px) {
+      .grid {
+        gap: 16px;
+      }
+
       .metric-card,
       .control-card {
         grid-column: span 3;
@@ -236,11 +240,67 @@
         font-size: clamp(1.9rem, 3vw, 2.8rem);
       }
 
+      .metric-card .value-row,
+      .control-card .value-row {
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+
       .metric-card .meta,
       .control-card .meta,
       .metric-card .timestamp,
       .control-card .timestamp {
         font-size: 0.88rem;
+      }
+
+      .metric-card .meta,
+      .control-card .meta {
+        margin-top: 10px;
+        line-height: 1.45;
+      }
+
+      .metric-card .timestamp,
+      .control-card .timestamp {
+        margin-top: 8px;
+      }
+
+      .status-badge {
+        padding: 9px 13px;
+        font-size: 0.94rem;
+      }
+
+      .alert-card .status-panel {
+        margin-bottom: 12px;
+        padding: 14px 16px;
+      }
+
+      .alert-card .help-banner {
+        margin-top: 10px;
+        padding: 12px 14px;
+      }
+
+      .alert-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin: 12px 0;
+      }
+
+      .alert-item {
+        padding: 14px 16px;
+      }
+
+      .alert-item-label {
+        margin-bottom: 8px;
+      }
+
+      .alert-item-value {
+        font-size: 0.98rem;
+        line-height: 1.45;
+      }
+
+      .alert-note {
+        margin-top: 10px;
+        padding: 12px 14px;
       }
     }
 
