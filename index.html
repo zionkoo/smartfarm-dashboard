@@ -966,6 +966,9 @@
               <div class="summary-pill">외부 습도 <strong id="outsideHumidityValue">--</strong></div>
               <div class="summary-pill">위치 상태 <strong id="outsideWeatherStatus">권한 대기</strong></div>
             </div>
+            <div class="history-actions">
+              <button class="btn-clear" id="retryOutsideWeatherBtn" type="button">외부 날씨 다시 시도</button>
+            </div>
             <p class="meta">현재 위치 기반 외부 날씨를 표시합니다.</p>
           </section>
         </div>
@@ -1354,6 +1357,7 @@
     const outsideWeatherSummary = document.getElementById("outsideWeatherSummary");
     const outsideHumidityValue = document.getElementById("outsideHumidityValue");
     const outsideWeatherStatus = document.getElementById("outsideWeatherStatus");
+    const retryOutsideWeatherBtn = document.getElementById("retryOutsideWeatherBtn");
     const soilValue = document.getElementById("soilValue");
     const soilStatus = document.getElementById("soilStatus");
     const soilFreshness = document.getElementById("soilFreshness");
@@ -3037,6 +3041,10 @@
 
     toggleHourlyTableBtn.addEventListener("click", function () {
       setHourlyTableVisibility(!isHourlyTableVisible);
+    });
+
+    retryOutsideWeatherBtn.addEventListener("click", function () {
+      requestOutsideWeather();
     });
 
     downloadClimateCsvBtn.addEventListener("click", function () {
