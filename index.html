@@ -1036,6 +1036,59 @@
       border: 1px solid rgba(23, 59, 45, 0.08);
     }
 
+    .event-log-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .event-log-item {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #f7fbf4, #ffffff);
+      border: 1px solid rgba(23, 59, 45, 0.08);
+    }
+
+    .event-log-item.is-success {
+      border-color: rgba(47, 158, 68, 0.2);
+      background: linear-gradient(135deg, #edf8ee, #ffffff);
+    }
+
+    .event-log-item.is-warning {
+      border-color: rgba(213, 155, 44, 0.2);
+      background: linear-gradient(135deg, #fff8e8, #ffffff);
+    }
+
+    .event-log-item.is-error {
+      border-color: rgba(214, 69, 69, 0.2);
+      background: linear-gradient(135deg, #fff2f2, #ffffff);
+    }
+
+    .event-log-time {
+      font-size: 0.84rem;
+      color: var(--text-soft);
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .event-log-text {
+      font-size: 0.98rem;
+      color: var(--text-main);
+      font-weight: 800;
+      line-height: 1.5;
+    }
+
+    .event-log-empty {
+      margin-top: 14px;
+      padding: 16px;
+      border-radius: 16px;
+      background: #f7fbf4;
+      color: var(--text-soft);
+      font-weight: 700;
+      border: 1px solid rgba(23, 59, 45, 0.08);
+    }
+
     .help-banner {
       margin-top: 14px;
       padding: 14px 16px;
@@ -1371,6 +1424,24 @@
         </p>
       </article>
 
+      <details class="card guide-card collapsible-card" id="eventLogSection">
+        <summary class="collapsible-summary">
+          <div class="collapsible-summary-main">
+            <h2 class="card-title">최근 이벤트 로그</h2>
+          </div>
+          <div class="collapsible-summary-preview" id="eventLogPreview">최근 이벤트 없음</div>
+        </summary>
+        <div class="history-summary">
+          <div class="summary-pill">이벤트 수 <strong id="eventLogCount">0개</strong></div>
+          <div class="summary-pill">마지막 이벤트 <strong id="eventLogLatest">--</strong></div>
+        </div>
+        <div class="event-log-empty" id="eventLogEmpty">아직 기록된 이벤트가 없습니다. 센서 상태 변화나 펌프 동작이 생기면 여기에 쌓입니다.</div>
+        <div class="event-log-list is-hidden" id="eventLogList"></div>
+        <div class="history-actions">
+          <button class="btn-clear" id="clearEventLogBtn" type="button">이벤트 로그 지우기</button>
+        </div>
+      </details>
+
       <details class="card history-card collapsible-card" id="historySection">
         <summary class="collapsible-summary">
           <div class="collapsible-summary-main">
@@ -1696,13 +1767,21 @@
     const alertTempDetail = document.getElementById("alertTempDetail");
     const alertHumidityDetail = document.getElementById("alertHumidityDetail");
     const alertLastTriggeredAt = document.getElementById("alertLastTriggeredAt");
+    const eventLogPreview = document.getElementById("eventLogPreview");
+    const eventLogCount = document.getElementById("eventLogCount");
+    const eventLogLatest = document.getElementById("eventLogLatest");
+    const eventLogEmpty = document.getElementById("eventLogEmpty");
+    const eventLogList = document.getElementById("eventLogList");
+    const clearEventLogBtn = document.getElementById("clearEventLogBtn");
     const loginHelpBanner = document.getElementById("loginHelpBanner");
     const STORAGE_KEY = "smartfarm-dashboard-login";
     const CLIMATE_HISTORY_KEY = "smartfarm-dashboard-climate-history";
     const ALERT_STATE_KEY = "smartfarm-dashboard-alert-state";
+    const EVENT_LOG_KEY = "smartfarm-dashboard-event-log";
     const STALE_WARNING_MS = 30000;
     const STALE_DELAY_MS = 90000;
     const MAX_CLIMATE_POINTS = 288;
+    const MAX_EVENT_LOGS = 40;
     const lastSeenAt = {
       soil: null,
       pump: null,
@@ -1718,8 +1797,10 @@
     };
     const alertState = loadAlertState();
     let climateHistory = loadClimateHistory();
+    let eventLogs = loadEventLogs();
     let deferredInstallPrompt = null;
     let isHourlyTableVisible = false;
+    let lastPumpLoggedState = null;
 
     function hasAnyRecentSensorData() {
       return Object.values(lastSeenAt).some(Boolean);
@@ -1806,10 +1887,16 @@
         const data = await response.json();
         updateOutsideWeatherUI(data.current);
         outsideWeatherStatus.textContent = "현재 위치 기준";
+        addEventLog(
+          `외부 날씨 갱신 · ${Number(data.current?.temperature_2m).toFixed(1)}°C · ${getWeatherLabel(data.current?.weather_code)}`,
+          "info",
+          `weather:${getWeatherLabel(data.current?.weather_code)}:${Number(data.current?.temperature_2m).toFixed(1)}`
+        );
       } catch (error) {
         console.error("outside weather fetch failed:", error);
         updateOutsideWeatherUI(null);
         outsideWeatherStatus.textContent = "조회 실패";
+        addEventLog("외부 날씨 조회 실패", "warning", "weather:failed");
       }
     }
 
@@ -1829,6 +1916,7 @@
         function () {
           outsideWeatherSummary.textContent = "위치 권한이 없어 외부 날씨를 가져오지 못했습니다.";
           outsideWeatherStatus.textContent = "권한 필요";
+          addEventLog("위치 권한 필요로 외부 날씨 조회 실패", "warning", "weather:permission");
         },
         {
           enableHighAccuracy: false,
@@ -1957,6 +2045,89 @@
           activeSignature: null
         };
       }
+    }
+
+    function loadEventLogs() {
+      try {
+        const raw = localStorage.getItem(EVENT_LOG_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+
+        if (!Array.isArray(parsed)) {
+          return [];
+        }
+
+        return parsed
+          .filter(function (item) {
+            return item && typeof item.message === "string" && typeof item.ts === "number";
+          })
+          .slice(0, MAX_EVENT_LOGS);
+      } catch (error) {
+        console.error("event log load failed:", error);
+        return [];
+      }
+    }
+
+    function saveEventLogs() {
+      try {
+        localStorage.setItem(EVENT_LOG_KEY, JSON.stringify(eventLogs.slice(0, MAX_EVENT_LOGS)));
+      } catch (error) {
+        console.error("event log save failed:", error);
+      }
+    }
+
+    function renderEventLogs() {
+      eventLogCount.textContent = `${eventLogs.length}개`;
+      eventLogLatest.textContent = eventLogs.length ? formatSavedDateTime(eventLogs[0].ts) : "--";
+      eventLogPreview.textContent = eventLogs.length
+        ? `${formatSavedDateTime(eventLogs[0].ts)} · ${eventLogs[0].message}`
+        : "최근 이벤트 없음";
+
+      if (!eventLogs.length) {
+        eventLogEmpty.classList.remove("is-hidden");
+        eventLogList.classList.add("is-hidden");
+        eventLogList.innerHTML = "";
+        return;
+      }
+
+      eventLogEmpty.classList.add("is-hidden");
+      eventLogList.classList.remove("is-hidden");
+      eventLogList.innerHTML = eventLogs.map(function (entry) {
+        const toneClass = entry.tone ? ` is-${entry.tone}` : "";
+        return `
+          <div class="event-log-item${toneClass}">
+            <div class="event-log-time">${formatSavedDateTime(entry.ts)}</div>
+            <div class="event-log-text">${entry.message}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function addEventLog(message, tone, signature) {
+      const now = Date.now();
+      const normalizedSignature = signature || message;
+      const latest = eventLogs[0];
+
+      if (
+        latest &&
+        latest.signature === normalizedSignature &&
+        now - latest.ts < 120000
+      ) {
+        return;
+      }
+
+      eventLogs.unshift({
+        ts: now,
+        message,
+        tone: tone || "info",
+        signature: normalizedSignature
+      });
+
+      if (eventLogs.length > MAX_EVENT_LOGS) {
+        eventLogs = eventLogs.slice(0, MAX_EVENT_LOGS);
+      }
+
+      saveEventLogs();
+      renderEventLogs();
     }
 
     function saveAlertState() {
@@ -2115,6 +2286,7 @@
     passwordInput.value = savedLogin?.password || "";
     rememberLoginCheckbox.checked = Boolean(savedLogin);
     updateLoginSummary(savedLogin ? "저장됨" : "미저장");
+    renderEventLogs();
 
     /*
       2. 차트 초기화
@@ -2415,6 +2587,12 @@
           alertState.activeSignature = alertSignature;
           saveAlertState();
           alertLastTriggeredAt.textContent = formatSavedDateTime(alertState.lastTriggeredAt);
+          const overallLabel = tempInfo.level === "alert" && humidityInfo.level === "alert"
+            ? "복합 경고"
+            : tempInfo.level === "alert"
+              ? "온도 경고"
+              : "습도 경고";
+          addEventLog(`${overallLabel} · ${tempInfo.text} / ${humidityInfo.text}`, "error", `alert:${alertSignature}`);
         }
 
         alertOverallStatus.textContent = tempInfo.level === "alert" && humidityInfo.level === "alert"
@@ -2434,6 +2612,7 @@
           alertState.activeSignature = alertSignature;
           saveAlertState();
           alertLastTriggeredAt.textContent = formatSavedDateTime(alertState.lastTriggeredAt);
+          addEventLog(`주의 상태 · ${tempInfo.text} / ${humidityInfo.text}`, "warning", `alert:${alertSignature}`);
         }
 
         alertOverallStatus.textContent = tempInfo.level === "caution" ? "온도 주의" : "주의";
@@ -2456,6 +2635,7 @@
       }
 
       if (alertState.activeSignature !== null) {
+        addEventLog("온습도 정상 복귀", "success", "alert:normal");
         alertState.activeSignature = null;
         saveAlertState();
       }
@@ -2760,6 +2940,11 @@
       const normalized = String(value).trim().toUpperCase();
       pumpState.textContent = normalized === "ON" ? "ON" : "OFF";
       markLastSeen("pump");
+
+      if (lastPumpLoggedState !== normalized) {
+        lastPumpLoggedState = normalized;
+        addEventLog(`펌프 상태 변경 · ${normalized === "ON" ? "가동 시작" : "가동 종료"}`, normalized === "ON" ? "warning" : "success", `pump:${normalized}`);
+      }
     }
 
     /*
@@ -2989,6 +3174,7 @@
       setLoginHelp("연결되었습니다. 이제 센서 데이터가 들어오면 카드와 그래프가 함께 갱신됩니다.", "success");
       togglePumpButtons(true);
       toggleTestButtons(true);
+      addEventLog("브로커 연결 성공", "success", "connection:connected");
 
       client.subscribe(topics.soil, function (error) {
         if (error) {
@@ -3049,6 +3235,7 @@
       togglePumpButtons(false);
       toggleTestButtons(false);
       toggleConnectButton(false);
+      addEventLog("브로커 연결 실패", "error", "connection:failed");
     }
 
     /*
@@ -3169,6 +3356,7 @@
         togglePumpButtons(false);
         toggleTestButtons(false);
         toggleConnectButton(true);
+        addEventLog("브로커 재연결 시도 중", "warning", "connection:reconnecting");
       });
 
       client.on("close", function () {
@@ -3177,6 +3365,7 @@
         togglePumpButtons(false);
         toggleTestButtons(false);
         toggleConnectButton(false);
+        addEventLog("브로커 연결 끊김", "error", "connection:disconnected");
       });
 
       client.on("error", function (error) {
@@ -3302,6 +3491,12 @@
       saveClimateHistory();
       climateDateInput.value = getLatestClimateDateKey();
       renderClimateHistory();
+    });
+
+    clearEventLogBtn.addEventListener("click", function () {
+      eventLogs = [];
+      saveEventLogs();
+      renderEventLogs();
     });
 
     climateDateInput.addEventListener("change", function () {
