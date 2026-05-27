@@ -2609,10 +2609,24 @@
       const soilInfo = getSoilAlertInfo();
       const tempInfo = getTempAlertInfo();
       const humidityInfo = getHumidityAlertInfo();
-      const infos = [soilInfo, tempInfo, humidityInfo];
+      const sensorInfos = [
+        { name: "토양", info: soilInfo },
+        { name: "온도", info: tempInfo },
+        { name: "습도", info: humidityInfo }
+      ];
+      const infos = sensorInfos.map(function (item) {
+        return item.info;
+      });
       const availableInfos = infos.filter(function (item) {
         return item.level !== "waiting";
       });
+      const waitingNames = sensorInfos
+        .filter(function (item) {
+          return item.info.level === "waiting";
+        })
+        .map(function (item) {
+          return item.name;
+        });
       const hasWaiting = availableInfos.length === 0;
       const hasAlert = soilInfo.level === "alert" || tempInfo.level === "alert" || humidityInfo.level === "alert";
       const hasCaution = tempInfo.level === "caution" || humidityInfo.level === "caution";
@@ -2679,7 +2693,7 @@
         }
         alertOverallStatus.textContent = "대기 중";
         alertOverallStatus.className = "status-display waiting";
-        alertSummaryText.textContent = "토양과 온습도 데이터가 들어오면 현재 경고 상태를 여기서 바로 확인할 수 있습니다.";
+        alertSummaryText.textContent = "아직 센서 데이터가 들어오지 않았습니다. 토양, 온도, 습도 값을 기다리고 있습니다.";
         alertSummaryText.className = "help-banner";
         return;
       }
@@ -2691,7 +2705,7 @@
         }
         alertOverallStatus.textContent = "센서 확인 중";
         alertOverallStatus.className = "status-display connecting";
-        alertSummaryText.textContent = "일부 센서값이 먼저 들어왔습니다. 현재 들어온 값 기준으로 상태를 표시하고, 나머지 값은 계속 확인하고 있습니다.";
+        alertSummaryText.textContent = `일부 센서값이 먼저 들어왔습니다. 현재 들어온 값 기준으로 상태를 표시하고, ${waitingNames.join(", ")} 값을 계속 확인하고 있습니다.`;
         alertSummaryText.className = "help-banner";
         return;
       }
