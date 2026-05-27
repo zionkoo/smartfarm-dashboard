@@ -2705,7 +2705,7 @@
         }
         alertOverallStatus.textContent = "센서 확인 중";
         alertOverallStatus.className = "status-display connecting";
-        alertSummaryText.textContent = `일부 센서값이 먼저 들어왔습니다. 현재 들어온 값 기준으로 상태를 표시하고, ${waitingNames.join(", ")} 값을 계속 확인하고 있습니다.`;
+        alertSummaryText.textContent = `${waitingNames.join(", ")} 데이터 확인 중`;
         alertSummaryText.className = "help-banner";
         return;
       }
