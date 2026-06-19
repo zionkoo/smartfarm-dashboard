@@ -1387,7 +1387,7 @@
         <div class="status-badge wet" id="phStatus">대기 중</div>
         <div class="status-badge neutral" id="phFreshness">수신 대기</div>
         <p class="timestamp" id="phUpdatedAt">마지막 수신: --</p>
-        <p class="meta">기준: 5.5 - 6.0 = 적정</p>
+        <p class="meta">기준: 6.0 - 6.5 = 적정</p>
         <p class="meta">토픽: <code>farm/ph</code></p>
       </article>
 
@@ -3419,10 +3419,10 @@
         return;
       }
 
-      if (numericValue < 5.5) {
+      if (numericValue < 6.0) {
         phStatus.textContent = "산성";
         phStatus.className = "status-badge dry";
-      } else if (numericValue > 6.0) {
+      } else if (numericValue > 6.5) {
         phStatus.textContent = "알칼리성";
         phStatus.className = "status-badge dry";
       } else {
