@@ -1335,6 +1335,26 @@
         <div class="pump-state" id="ledState">--</div>
         <div class="status-badge neutral" id="ledFreshness">수신 대기</div>
         <p class="timestamp" id="ledUpdatedAt">마지막 수신: --</p>
+        <div class="controls">
+          <button class="btn-on" id="ledOnBtn" type="button">LED ON</button>
+          <button class="btn-off" id="ledOffBtn" type="button">LED OFF</button>
+        </div>
+        <div class="history-toolbar">
+          <div class="field">
+            <label for="ledOnTimeInput">켜짐 예약</label>
+            <input id="ledOnTimeInput" type="time" />
+          </div>
+          <div class="field">
+            <label for="ledOffTimeInput">꺼짐 예약</label>
+            <input id="ledOffTimeInput" type="time" />
+          </div>
+        </div>
+        <div class="controls">
+          <button class="btn-connect" id="saveLedScheduleBtn" type="button">LED 예약 저장</button>
+          <button class="btn-clear" id="clearLedScheduleBtn" type="button">예약 지우기</button>
+        </div>
+        <p class="meta" id="ledScheduleSummary">예약 꺼짐</p>
+        <p class="meta">예약은 이 대시보드가 열려 있고 브로커에 연결된 동안 동작합니다.</p>
         <p class="meta">토픽: <code>farm/led</code></p>
       </article>
 
@@ -1744,6 +1764,13 @@
     const humidityUpdatedAt = document.getElementById("humidityUpdatedAt");
     const pumpOnBtn = document.getElementById("pumpOnBtn");
     const pumpOffBtn = document.getElementById("pumpOffBtn");
+    const ledOnBtn = document.getElementById("ledOnBtn");
+    const ledOffBtn = document.getElementById("ledOffBtn");
+    const ledOnTimeInput = document.getElementById("ledOnTimeInput");
+    const ledOffTimeInput = document.getElementById("ledOffTimeInput");
+    const saveLedScheduleBtn = document.getElementById("saveLedScheduleBtn");
+    const clearLedScheduleBtn = document.getElementById("clearLedScheduleBtn");
+    const ledScheduleSummary = document.getElementById("ledScheduleSummary");
     const soilDryTestBtn = document.getElementById("soilDryTestBtn");
     const soilWetTestBtn = document.getElementById("soilWetTestBtn");
     const co2TestBtn = document.getElementById("co2TestBtn");
@@ -1795,6 +1822,7 @@
     const STORAGE_KEY = "smartfarm-dashboard-login";
     const CLIMATE_HISTORY_KEY = "smartfarm-dashboard-climate-history";
     const SENSOR_HISTORY_KEY = "smartfarm-dashboard-sensor-history";
+    const LED_SCHEDULE_KEY = "smartfarm-dashboard-led-schedule";
     const ALERT_STATE_KEY = "smartfarm-dashboard-alert-state";
     const EVENT_LOG_KEY = "smartfarm-dashboard-event-log";
     const STALE_WARNING_MS = 30000;
@@ -1835,6 +1863,7 @@
     let isHourlyTableVisible = false;
     let lastPumpLoggedState = null;
     let lastLedLoggedState = null;
+    let ledSchedule = loadLedSchedule();
 
     function hasAnyRecentSensorData() {
       return Object.values(lastSeenAt).some(Boolean);
@@ -2079,6 +2108,61 @@
           activeSignature: null
         };
       }
+    }
+
+    function loadLedSchedule() {
+      try {
+        const raw = localStorage.getItem(LED_SCHEDULE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return {
+          onTime: typeof parsed?.onTime === "string" ? parsed.onTime : "",
+          offTime: typeof parsed?.offTime === "string" ? parsed.offTime : "",
+          enabled: Boolean(parsed?.enabled),
+          lastOnTrigger: typeof parsed?.lastOnTrigger === "string" ? parsed.lastOnTrigger : "",
+          lastOffTrigger: typeof parsed?.lastOffTrigger === "string" ? parsed.lastOffTrigger : ""
+        };
+      } catch (error) {
+        console.error("led schedule load failed:", error);
+        return {
+          onTime: "",
+          offTime: "",
+          enabled: false,
+          lastOnTrigger: "",
+          lastOffTrigger: ""
+        };
+      }
+    }
+
+    function saveLedSchedule() {
+      try {
+        localStorage.setItem(LED_SCHEDULE_KEY, JSON.stringify(ledSchedule));
+      } catch (error) {
+        console.error("led schedule save failed:", error);
+      }
+    }
+
+    function updateLedScheduleSummary() {
+      ledOnTimeInput.value = ledSchedule.onTime || "";
+      ledOffTimeInput.value = ledSchedule.offTime || "";
+
+      if (!ledSchedule.enabled || (!ledSchedule.onTime && !ledSchedule.offTime)) {
+        ledScheduleSummary.textContent = "예약 꺼짐";
+        return;
+      }
+
+      const parts = [];
+      if (ledSchedule.onTime) {
+        parts.push(`ON ${ledSchedule.onTime}`);
+      }
+      if (ledSchedule.offTime) {
+        parts.push(`OFF ${ledSchedule.offTime}`);
+      }
+      ledScheduleSummary.textContent = `예약 실행 중 · ${parts.join(" / ")}`;
+    }
+
+    function getScheduleTriggerKey(now, timeText) {
+      const dateKey = getLocalDateKey(now.getTime());
+      return `${dateKey} ${timeText}`;
     }
 
     function loadEventLogs() {
@@ -3479,6 +3563,8 @@
     function togglePumpButtons(isConnected) {
       pumpOnBtn.disabled = !isConnected;
       pumpOffBtn.disabled = !isConnected;
+      ledOnBtn.disabled = !isConnected;
+      ledOffBtn.disabled = !isConnected;
     }
 
     function toggleTestButtons(isConnected) {
@@ -3753,6 +3839,50 @@
       updatePumpUI(state);
     }
 
+    function publishLedState(state, silent) {
+      if (!client || !client.connected) {
+        if (!silent) {
+          alert("MQTT 브로커에 연결되어 있지 않습니다.");
+        }
+        return false;
+      }
+
+      client.publish(topics.led, state);
+      updateLedStateUI(state);
+      return true;
+    }
+
+    function checkLedSchedule() {
+      if (!ledSchedule.enabled) {
+        return;
+      }
+
+      const now = new Date();
+      const currentTime = now.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      });
+
+      if (ledSchedule.onTime && currentTime === ledSchedule.onTime) {
+        const triggerKey = getScheduleTriggerKey(now, ledSchedule.onTime);
+        if (ledSchedule.lastOnTrigger !== triggerKey && publishLedState("ON", true)) {
+          ledSchedule.lastOnTrigger = triggerKey;
+          saveLedSchedule();
+          addEventLog(`LED 예약 실행 · ${ledSchedule.onTime} ON`, "info", `led-schedule:on:${triggerKey}`);
+        }
+      }
+
+      if (ledSchedule.offTime && currentTime === ledSchedule.offTime) {
+        const triggerKey = getScheduleTriggerKey(now, ledSchedule.offTime);
+        if (ledSchedule.lastOffTrigger !== triggerKey && publishLedState("OFF", true)) {
+          ledSchedule.lastOffTrigger = triggerKey;
+          saveLedSchedule();
+          addEventLog(`LED 예약 실행 · ${ledSchedule.offTime} OFF`, "success", `led-schedule:off:${triggerKey}`);
+        }
+      }
+    }
+
     function publishTestMessage(topic, value) {
       if (!client || !client.connected) {
         alert("먼저 MQTT 브로커에 연결해주세요.");
@@ -3768,6 +3898,38 @@
 
     pumpOffBtn.addEventListener("click", function () {
       publishPumpState("OFF");
+    });
+
+    ledOnBtn.addEventListener("click", function () {
+      publishLedState("ON");
+    });
+
+    ledOffBtn.addEventListener("click", function () {
+      publishLedState("OFF");
+    });
+
+    saveLedScheduleBtn.addEventListener("click", function () {
+      ledSchedule.onTime = ledOnTimeInput.value;
+      ledSchedule.offTime = ledOffTimeInput.value;
+      ledSchedule.enabled = Boolean(ledSchedule.onTime || ledSchedule.offTime);
+      ledSchedule.lastOnTrigger = "";
+      ledSchedule.lastOffTrigger = "";
+      saveLedSchedule();
+      updateLedScheduleSummary();
+      addEventLog("LED 예약 저장", "info", `led-schedule:save:${ledSchedule.onTime}:${ledSchedule.offTime}`);
+    });
+
+    clearLedScheduleBtn.addEventListener("click", function () {
+      ledSchedule = {
+        onTime: "",
+        offTime: "",
+        enabled: false,
+        lastOnTrigger: "",
+        lastOffTrigger: ""
+      };
+      saveLedSchedule();
+      updateLedScheduleSummary();
+      addEventLog("LED 예약 삭제", "success", "led-schedule:clear");
     });
 
     soilDryTestBtn.addEventListener("click", function () {
@@ -3910,10 +4072,12 @@
     setHourlyTableVisibility(false);
     refreshAlertUI();
     renderClimateHistory();
+    updateLedScheduleSummary();
     updateActiveMobileNav();
     window.addEventListener("scroll", updateActiveMobileNav, { passive: true });
     setInterval(function () {
       updateDateTimeCards();
+      checkLedSchedule();
     }, 1000);
     setInterval(function () {
       pushClimateHistoryPoint();
