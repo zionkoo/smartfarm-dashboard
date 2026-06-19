@@ -1243,7 +1243,7 @@
       <h1>Zionkoo's SmartFarm Dashboard</h1>
       <p>
         MQTT WebSocket으로 들어오는 스마트팜 센서 데이터를 실시간으로 보여주는 대시보드입니다.
-        토양 수분, 펌프 상태, LED 광량, EC, pH뿐 아니라 온도와 습도를 시간대별 그래프로 저장하면서 볼 수 있습니다.
+        토양 수분, 펌프 상태, CO2 농도, EC, pH뿐 아니라 온도와 습도를 시간대별 그래프로 저장하면서 볼 수 있습니다.
       </p>
 
       <div class="connection">
@@ -1308,9 +1308,14 @@
       </article>
 
       <article class="card metric-card">
-        <h2 class="card-title">토양 상태</h2>
-        <div class="status-badge wet" id="soilStatus">대기 중</div>
-        <p class="meta">기준: 500 이하 = 건조, 500 초과 = 정상</p>
+        <h2 class="card-title">CO2 농도</h2>
+        <div class="value-row">
+          <p class="big-value" id="co2Value">--</p>
+          <span class="unit">ppm</span>
+        </div>
+        <div class="status-badge neutral" id="co2Freshness">수신 대기</div>
+        <p class="timestamp" id="co2UpdatedAt">마지막 수신: --</p>
+        <p class="meta">토픽: <code>farm/co2</code></p>
       </article>
 
       <article class="card control-card" id="controlSection">
@@ -1326,16 +1331,10 @@
       </article>
 
       <article class="card metric-card">
-        <h2 class="card-title">LED 광량</h2>
-        <div class="value-row">
-          <p class="big-value" id="ledValue">--</p>
-          <span class="unit">PPFD</span>
-        </div>
-        <div class="status-badge wet" id="ledStatus">대기 중</div>
-        <div class="status-badge neutral" id="ledFreshness">수신 대기</div>
-        <p class="timestamp" id="ledUpdatedAt">마지막 수신: --</p>
-        <p class="meta">기준: 최소 100, 권장 150 - 250 μmol/m²/s</p>
-        <p class="meta">토픽: <code>farm/led</code></p>
+        <h2 class="card-title">CO2 상태</h2>
+        <div class="status-badge neutral" id="co2Status">대기 중</div>
+        <p class="timestamp" id="co2StatusUpdatedAt">마지막 수신: --</p>
+        <p class="meta">기준: 400 - 1200 ppm = 적정 / 399 이하 = 낮음 / 1201 이상 = 높음</p>
       </article>
 
       <article class="card metric-card">
@@ -1588,7 +1587,7 @@
         <div class="controls">
           <button class="btn-test" id="soilDryTestBtn" type="button">Soil 430</button>
           <button class="btn-test" id="soilWetTestBtn" type="button">Soil 620</button>
-          <button class="btn-test" id="ledTestBtn" type="button">LED 180</button>
+          <button class="btn-test" id="co2TestBtn" type="button">CO2 850</button>
           <button class="btn-test" id="ecTestBtn" type="button">EC 1.7</button>
           <button class="btn-test" id="phTestBtn" type="button">pH 5.8</button>
           <button class="btn-test" id="tempTestBtn" type="button">Temp 23</button>
@@ -1670,7 +1669,7 @@
     const topics = {
       soil: "farm/soil",
       pump: "farm/pump",
-      led: "farm/led",
+      co2: "farm/co2",
       ec: "farm/ec",
       ph: "farm/ph",
       temp: "farm/temp",
@@ -1704,16 +1703,16 @@
     const outsideWeatherStatus = document.getElementById("outsideWeatherStatus");
     const retryOutsideWeatherBtn = document.getElementById("retryOutsideWeatherBtn");
     const soilValue = document.getElementById("soilValue");
-    const soilStatus = document.getElementById("soilStatus");
     const soilFreshness = document.getElementById("soilFreshness");
     const soilUpdatedAt = document.getElementById("soilUpdatedAt");
     const pumpState = document.getElementById("pumpState");
     const pumpFreshness = document.getElementById("pumpFreshness");
     const pumpUpdatedAt = document.getElementById("pumpUpdatedAt");
-    const ledValue = document.getElementById("ledValue");
-    const ledStatus = document.getElementById("ledStatus");
-    const ledFreshness = document.getElementById("ledFreshness");
-    const ledUpdatedAt = document.getElementById("ledUpdatedAt");
+    const co2Value = document.getElementById("co2Value");
+    const co2Status = document.getElementById("co2Status");
+    const co2Freshness = document.getElementById("co2Freshness");
+    const co2UpdatedAt = document.getElementById("co2UpdatedAt");
+    const co2StatusUpdatedAt = document.getElementById("co2StatusUpdatedAt");
     const ecValue = document.getElementById("ecValue");
     const ecStatus = document.getElementById("ecStatus");
     const ecFreshness = document.getElementById("ecFreshness");
@@ -1734,7 +1733,7 @@
     const pumpOffBtn = document.getElementById("pumpOffBtn");
     const soilDryTestBtn = document.getElementById("soilDryTestBtn");
     const soilWetTestBtn = document.getElementById("soilWetTestBtn");
-    const ledTestBtn = document.getElementById("ledTestBtn");
+    const co2TestBtn = document.getElementById("co2TestBtn");
     const ecTestBtn = document.getElementById("ecTestBtn");
     const phTestBtn = document.getElementById("phTestBtn");
     const tempTestBtn = document.getElementById("tempTestBtn");
@@ -1790,7 +1789,7 @@
     const lastSeenAt = {
       soil: null,
       pump: null,
-      led: null,
+      co2: null,
       ec: null,
       ph: null,
       temp: null,
@@ -2915,7 +2914,7 @@
       const map = {
         soil: { badge: soilFreshness, text: soilUpdatedAt },
         pump: { badge: pumpFreshness, text: pumpUpdatedAt },
-        led: { badge: ledFreshness, text: ledUpdatedAt },
+        co2: { badge: co2Freshness, text: co2UpdatedAt },
         ec: { badge: ecFreshness, text: ecUpdatedAt },
         ph: { badge: phFreshness, text: phUpdatedAt },
         temp: { badge: tempFreshness, text: tempUpdatedAt },
@@ -2986,14 +2985,6 @@
       currentSoil = value;
       markLastSeen("soil");
 
-      if (value <= 500) {
-        soilStatus.textContent = "건조 (dry)";
-        soilStatus.className = "status-badge dry";
-      } else {
-        soilStatus.textContent = "정상 (wet)";
-        soilStatus.className = "status-badge wet";
-      }
-
       refreshAlertUI();
 
       soilChart.data.labels.push(getTimeLabel());
@@ -3027,32 +3018,32 @@
     }
 
     /*
-      LED 광량, EC, pH 값도 숫자로 받아 화면에 표시합니다.
+      CO2, EC, pH 값도 숫자로 받아 화면에 표시합니다.
       숫자가 아니어도 문자열 그대로 표시할 수 있게 단순화했습니다.
     */
-    function updateLedUI(value) {
+    function updateCo2UI(value) {
       const numericValue = Number(value);
-      ledValue.textContent = value;
-      markLastSeen("led");
 
       if (Number.isNaN(numericValue)) {
-        ledStatus.textContent = "확인 필요";
-        ledStatus.className = "status-badge dry";
         return;
       }
 
-      if (numericValue < 100) {
-        ledStatus.textContent = "부족";
-        ledStatus.className = "status-badge dry";
-      } else if (numericValue < 150) {
-        ledStatus.textContent = "최소권";
-        ledStatus.className = "status-badge caution";
-      } else if (numericValue <= 250) {
-        ledStatus.textContent = "적정";
-        ledStatus.className = "status-badge wet";
+      co2Value.textContent = Number.isInteger(numericValue) ? String(numericValue) : numericValue.toFixed(1);
+      markLastSeen("co2");
+      co2StatusUpdatedAt.textContent = `마지막 수신: ${formatLastSeen(lastSeenAt.co2)}`;
+
+      if (numericValue < 400) {
+        co2Status.textContent = "낮음";
+        co2Status.className = "status-badge dry";
+      } else if (numericValue <= 1200) {
+        co2Status.textContent = "적정";
+        co2Status.className = "status-badge wet";
+      } else if (numericValue <= 1500) {
+        co2Status.textContent = "주의";
+        co2Status.className = "status-badge caution";
       } else {
-        ledStatus.textContent = "높음";
-        ledStatus.className = "status-badge dry";
+        co2Status.textContent = "높음";
+        co2Status.className = "status-badge dry";
       }
     }
 
@@ -3233,7 +3224,7 @@
     }
 
     function toggleTestButtons(isConnected) {
-      [soilDryTestBtn, soilWetTestBtn, ledTestBtn, ecTestBtn, phTestBtn, tempTestBtn, humidityTestBtn].forEach(function (button) {
+      [soilDryTestBtn, soilWetTestBtn, co2TestBtn, ecTestBtn, phTestBtn, tempTestBtn, humidityTestBtn].forEach(function (button) {
         button.disabled = !isConnected;
       });
     }
@@ -3267,9 +3258,9 @@
         }
       });
 
-      client.subscribe(topics.led, function (error) {
+      client.subscribe(topics.co2, function (error) {
         if (error) {
-          console.error("led topic subscribe failed:", error);
+          console.error("co2 topic subscribe failed:", error);
         }
       });
 
@@ -3394,8 +3385,8 @@
           updatePumpUI(message);
         }
 
-        if (topic === topics.led) {
-          updateLedUI(message);
+        if (topic === topics.co2) {
+          updateCo2UI(message);
         }
 
         if (topic === topics.ec) {
@@ -3519,8 +3510,8 @@
       publishTestMessage(topics.soil, 620);
     });
 
-    ledTestBtn.addEventListener("click", function () {
-      publishTestMessage(topics.led, 180);
+    co2TestBtn.addEventListener("click", function () {
+      publishTestMessage(topics.co2, 850);
     });
 
     ecTestBtn.addEventListener("click", function () {
@@ -3637,7 +3628,7 @@
     requestOutsideWeather();
     updateFreshnessUI("soil");
     updateFreshnessUI("pump");
-    updateFreshnessUI("led");
+    updateFreshnessUI("co2");
     updateFreshnessUI("ec");
     updateFreshnessUI("ph");
     updateFreshnessUI("temp");
@@ -3660,7 +3651,7 @@
     setInterval(function () {
       updateFreshnessUI("soil");
       updateFreshnessUI("pump");
-      updateFreshnessUI("led");
+      updateFreshnessUI("co2");
       updateFreshnessUI("ec");
       updateFreshnessUI("ph");
       updateFreshnessUI("temp");
