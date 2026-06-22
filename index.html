@@ -1313,8 +1313,11 @@
           <p class="big-value" id="co2Value">--</p>
           <span class="unit">ppm</span>
         </div>
+        <div class="status-badge neutral" id="co2Status">대기 중</div>
         <div class="status-badge neutral" id="co2Freshness">수신 대기</div>
         <p class="timestamp" id="co2UpdatedAt">마지막 수신: --</p>
+        <p class="timestamp" id="co2StatusUpdatedAt">상태 갱신: --</p>
+        <p class="meta">기준: 400 - 1200 ppm = 적정 / 399 이하 = 낮음 / 1201 이상 = 높음</p>
         <p class="meta">토픽: <code>farm/co2</code></p>
       </article>
 
@@ -1339,30 +1342,28 @@
           <button class="btn-on" id="ledOnBtn" type="button">LED ON</button>
           <button class="btn-off" id="ledOffBtn" type="button">LED OFF</button>
         </div>
+        <p class="meta">토픽: <code>farm/led</code></p>
+      </article>
+
+      <article class="card control-card">
+        <h2 class="card-title">스케줄러</h2>
         <div class="history-toolbar">
           <div class="field">
-            <label for="ledOnTimeInput">켜짐 예약</label>
+            <label for="ledOnTimeInput">LED 켜짐 예약</label>
             <input id="ledOnTimeInput" type="time" />
           </div>
           <div class="field">
-            <label for="ledOffTimeInput">꺼짐 예약</label>
+            <label for="ledOffTimeInput">LED 꺼짐 예약</label>
             <input id="ledOffTimeInput" type="time" />
           </div>
         </div>
         <div class="controls">
-          <button class="btn-connect" id="saveLedScheduleBtn" type="button">LED 예약 저장</button>
+          <button class="btn-connect" id="saveLedScheduleBtn" type="button">예약 저장</button>
           <button class="btn-clear" id="clearLedScheduleBtn" type="button">예약 지우기</button>
         </div>
-        <p class="meta" id="ledScheduleSummary">예약 꺼짐</p>
-        <p class="meta">예약은 이 대시보드가 열려 있고 브로커에 연결된 동안 동작합니다.</p>
-        <p class="meta">토픽: <code>farm/led</code></p>
-      </article>
-
-      <article class="card metric-card">
-        <h2 class="card-title">CO2 상태</h2>
-        <div class="status-badge neutral" id="co2Status">대기 중</div>
-        <p class="timestamp" id="co2StatusUpdatedAt">마지막 수신: --</p>
-        <p class="meta">기준: 400 - 1200 ppm = 적정 / 399 이하 = 낮음 / 1201 이상 = 높음</p>
+        <p class="meta" id="ledScheduleSummary">LED 예약 꺼짐</p>
+        <p class="meta">이 카드는 LED 예약 전용입니다.</p>
+        <p class="meta">예약은 대시보드가 열려 있고 브로커에 연결된 동안 동작합니다.</p>
       </article>
 
       <article class="card metric-card">
