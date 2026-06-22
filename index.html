@@ -965,6 +965,46 @@
       color: var(--text-main);
     }
 
+    .weekday-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .weekday-chip {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .weekday-chip input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .weekday-chip span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 48px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(23, 59, 45, 0.12);
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--text-soft);
+      font-weight: 800;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .weekday-chip input:checked + span {
+      background: linear-gradient(135deg, #3fa84d, #2f9e44);
+      border-color: #2f9e44;
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
     .status-panel {
       margin-bottom: 16px;
       padding: 16px 18px;
@@ -1404,8 +1444,17 @@
         <p class="meta">토픽: <code>farm/led</code></p>
       </article>
 
-      <article class="card control-card">
-        <h2 class="card-title">스케줄러</h2>
+      <details class="card control-card collapsible-card" id="ledScheduleSection" open>
+        <summary class="collapsible-summary">
+          <div class="collapsible-summary-main">
+            <h2 class="card-title">LED ON/OFF 예약</h2>
+          </div>
+          <div class="collapsible-summary-preview" id="ledSchedulePreview">LED 예약 사용 안 함</div>
+        </summary>
+        <div class="history-summary">
+          <div class="summary-pill">반복 요일 <strong id="ledScheduleDaysSummary">매일</strong></div>
+          <div class="summary-pill">예약 시간 <strong id="ledScheduleTimesSummary">설정 없음</strong></div>
+        </div>
         <div class="history-toolbar">
           <div class="field">
             <label for="ledOnTimeInput">LED 켜짐 예약</label>
@@ -1415,15 +1464,27 @@
             <label for="ledOffTimeInput">LED 꺼짐 예약</label>
             <input id="ledOffTimeInput" type="time" />
           </div>
+          <div class="field field-wide">
+            <label>반복 요일</label>
+            <div class="weekday-picker" id="ledScheduleDayPicker">
+              <label class="weekday-chip"><input type="checkbox" value="mon" data-led-day="mon" checked /><span>월</span></label>
+              <label class="weekday-chip"><input type="checkbox" value="tue" data-led-day="tue" checked /><span>화</span></label>
+              <label class="weekday-chip"><input type="checkbox" value="wed" data-led-day="wed" checked /><span>수</span></label>
+              <label class="weekday-chip"><input type="checkbox" value="thu" data-led-day="thu" checked /><span>목</span></label>
+              <label class="weekday-chip"><input type="checkbox" value="fri" data-led-day="fri" checked /><span>금</span></label>
+              <label class="weekday-chip"><input type="checkbox" value="sat" data-led-day="sat" checked /><span>토</span></label>
+              <label class="weekday-chip"><input type="checkbox" value="sun" data-led-day="sun" checked /><span>일</span></label>
+            </div>
+          </div>
         </div>
         <div class="controls">
           <button class="btn-connect" id="saveLedScheduleBtn" type="button">예약 저장</button>
           <button class="btn-clear" id="clearLedScheduleBtn" type="button">예약 지우기</button>
         </div>
-        <p class="meta" id="ledScheduleSummary">LED 예약 꺼짐</p>
-        <p class="meta">이 카드는 LED 예약 전용입니다.</p>
+        <p class="meta" id="ledScheduleSummary">LED 예약 사용 안 함</p>
+        <p class="meta">LED ON/OFF 시간과 반복 요일을 함께 예약하는 카드입니다.</p>
         <p class="meta">예약은 대시보드가 열려 있고 브로커에 연결된 동안 동작합니다.</p>
-      </article>
+      </details>
 
       <article class="card metric-card">
         <h2 class="card-title">EC 농도</h2>
@@ -1837,9 +1898,13 @@
     const ledOffBtn = document.getElementById("ledOffBtn");
     const ledOnTimeInput = document.getElementById("ledOnTimeInput");
     const ledOffTimeInput = document.getElementById("ledOffTimeInput");
+    const ledScheduleDayInputs = Array.from(document.querySelectorAll("[data-led-day]"));
     const saveLedScheduleBtn = document.getElementById("saveLedScheduleBtn");
     const clearLedScheduleBtn = document.getElementById("clearLedScheduleBtn");
+    const ledSchedulePreview = document.getElementById("ledSchedulePreview");
     const ledScheduleSummary = document.getElementById("ledScheduleSummary");
+    const ledScheduleDaysSummary = document.getElementById("ledScheduleDaysSummary");
+    const ledScheduleTimesSummary = document.getElementById("ledScheduleTimesSummary");
     const hostInput = document.getElementById("hostInput");
     const portInput = document.getElementById("portInput");
     const pathInput = document.getElementById("pathInput");
@@ -1898,6 +1963,16 @@
     const ALERT_STATE_KEY = "smartfarm-dashboard-alert-state";
     const EVENT_LOG_KEY = "smartfarm-dashboard-event-log";
     const JOURNAL_KEY = "smartfarm-dashboard-journal";
+    const LED_SCHEDULE_DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+    const LED_SCHEDULE_DAY_LABELS = {
+      mon: "월",
+      tue: "화",
+      wed: "수",
+      thu: "목",
+      fri: "금",
+      sat: "토",
+      sun: "일"
+    };
     const STALE_WARNING_MS = 30000;
     const STALE_DELAY_MS = 90000;
     const MAX_CLIMATE_POINTS = 288;
@@ -2188,10 +2263,17 @@
       try {
         const raw = localStorage.getItem(LED_SCHEDULE_KEY);
         const parsed = raw ? JSON.parse(raw) : null;
+        const normalizedDays = Array.isArray(parsed?.days)
+          ? parsed.days.filter(function (day) {
+              return LED_SCHEDULE_DAY_KEYS.includes(day);
+            })
+          : LED_SCHEDULE_DAY_KEYS.slice();
+
         return {
           onTime: typeof parsed?.onTime === "string" ? parsed.onTime : "",
           offTime: typeof parsed?.offTime === "string" ? parsed.offTime : "",
           enabled: Boolean(parsed?.enabled),
+          days: normalizedDays.length ? normalizedDays : LED_SCHEDULE_DAY_KEYS.slice(),
           lastOnTrigger: typeof parsed?.lastOnTrigger === "string" ? parsed.lastOnTrigger : "",
           lastOffTrigger: typeof parsed?.lastOffTrigger === "string" ? parsed.lastOffTrigger : ""
         };
@@ -2201,6 +2283,7 @@
           onTime: "",
           offTime: "",
           enabled: false,
+          days: LED_SCHEDULE_DAY_KEYS.slice(),
           lastOnTrigger: "",
           lastOffTrigger: ""
         };
@@ -2215,23 +2298,64 @@
       }
     }
 
+    function getSelectedLedScheduleDays() {
+      return ledScheduleDayInputs
+        .filter(function (input) {
+          return input.checked;
+        })
+        .map(function (input) {
+          return input.value;
+        });
+    }
+
+    function formatLedScheduleDays(days) {
+      if (!Array.isArray(days) || !days.length || days.length === LED_SCHEDULE_DAY_KEYS.length) {
+        return "매일";
+      }
+
+      return days
+        .map(function (day) {
+          return LED_SCHEDULE_DAY_LABELS[day] || day;
+        })
+        .join(" / ");
+    }
+
+    function getLedScheduleTimesText(onTime, offTime) {
+      const parts = [];
+
+      if (onTime) {
+        parts.push(`ON ${onTime}`);
+      }
+
+      if (offTime) {
+        parts.push(`OFF ${offTime}`);
+      }
+
+      return parts.length ? parts.join(" / ") : "설정 없음";
+    }
+
     function updateLedScheduleSummary() {
       ledOnTimeInput.value = ledSchedule.onTime || "";
       ledOffTimeInput.value = ledSchedule.offTime || "";
+      ledScheduleDayInputs.forEach(function (input) {
+        input.checked = ledSchedule.days.includes(input.value);
+      });
 
       if (!ledSchedule.enabled || (!ledSchedule.onTime && !ledSchedule.offTime)) {
-        ledScheduleSummary.textContent = "예약 꺼짐";
+        ledScheduleSummary.textContent = "LED 예약 사용 안 함";
+        ledSchedulePreview.textContent = "LED 예약 사용 안 함";
+        ledScheduleDaysSummary.textContent = formatLedScheduleDays(ledSchedule.days);
+        ledScheduleTimesSummary.textContent = "설정 없음";
         return;
       }
 
-      const parts = [];
-      if (ledSchedule.onTime) {
-        parts.push(`ON ${ledSchedule.onTime}`);
-      }
-      if (ledSchedule.offTime) {
-        parts.push(`OFF ${ledSchedule.offTime}`);
-      }
-      ledScheduleSummary.textContent = `예약 실행 중 · ${parts.join(" / ")}`;
+      const dayText = formatLedScheduleDays(ledSchedule.days);
+      const timeText = getLedScheduleTimesText(ledSchedule.onTime, ledSchedule.offTime);
+
+      ledScheduleDaysSummary.textContent = dayText;
+      ledScheduleTimesSummary.textContent = timeText;
+      ledSchedulePreview.textContent = `${dayText} · ${timeText}`;
+      ledScheduleSummary.textContent = `LED 예약 실행 중 · ${dayText} · ${timeText}`;
     }
 
     function getScheduleTriggerKey(now, timeText) {
@@ -3904,6 +4028,12 @@
       }
 
       const now = new Date();
+      const currentDay = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][now.getDay()];
+
+      if (!ledSchedule.days.includes(currentDay)) {
+        return;
+      }
+
       const currentTime = now.toLocaleTimeString("en-GB", {
         hour: "2-digit",
         minute: "2-digit",
@@ -3946,14 +4076,22 @@
     });
 
     saveLedScheduleBtn.addEventListener("click", function () {
+      const selectedDays = getSelectedLedScheduleDays();
+
+      if ((ledOnTimeInput.value || ledOffTimeInput.value) && !selectedDays.length) {
+        alert("반복 요일을 하나 이상 선택해주세요.");
+        return;
+      }
+
       ledSchedule.onTime = ledOnTimeInput.value;
       ledSchedule.offTime = ledOffTimeInput.value;
+      ledSchedule.days = selectedDays.length ? selectedDays : LED_SCHEDULE_DAY_KEYS.slice();
       ledSchedule.enabled = Boolean(ledSchedule.onTime || ledSchedule.offTime);
       ledSchedule.lastOnTrigger = "";
       ledSchedule.lastOffTrigger = "";
       saveLedSchedule();
       updateLedScheduleSummary();
-      addEventLog("LED 예약 저장", "info", `led-schedule:save:${ledSchedule.onTime}:${ledSchedule.offTime}`);
+      addEventLog("LED 예약 저장", "info", `led-schedule:save:${ledSchedule.onTime}:${ledSchedule.offTime}:${ledSchedule.days.join(",")}`);
     });
 
     clearLedScheduleBtn.addEventListener("click", function () {
@@ -3961,6 +4099,7 @@
         onTime: "",
         offTime: "",
         enabled: false,
+        days: LED_SCHEDULE_DAY_KEYS.slice(),
         lastOnTrigger: "",
         lastOffTrigger: ""
       };
