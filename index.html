@@ -773,6 +773,20 @@
       color: #234231;
     }
 
+    .mode-state {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 64px;
+      padding: 14px 18px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #f3f8ee, #ffffff);
+      color: var(--text-main);
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      font-weight: 900;
+      letter-spacing: -0.02em;
+    }
+
     .collapsible-card[open] .card-title::after {
       content: "닫기";
       margin-left: 10px;
@@ -1395,6 +1409,19 @@
         </div>
       </article>
 
+      <article class="card control-card">
+        <h2 class="card-title">운영 모드</h2>
+        <div class="mode-state" id="systemModeValue">수동 모드</div>
+        <div class="status-badge wet" id="systemModeStatus">직접 제어 가능</div>
+        <p class="timestamp" id="systemModeUpdatedAt">마지막 변경: --</p>
+        <div class="controls">
+          <button class="btn-connect" id="autoModeBtn" type="button">자동</button>
+          <button class="btn-on" id="manualModeBtn" type="button">수동</button>
+          <button class="btn-clear" id="maintenanceModeBtn" type="button">점검</button>
+        </div>
+        <p class="meta" id="systemModeSummary">현재는 수동 제어 중심으로 운영 중입니다.</p>
+      </article>
+
       <article class="card control-card" id="controlSection">
         <h2 class="card-title">펌프 상태</h2>
         <div class="pump-state" id="pumpState">--</div>
@@ -1902,6 +1929,13 @@
     const humidityStatus = document.getElementById("humidityStatus");
     const humidityFreshness = document.getElementById("humidityFreshness");
     const humidityUpdatedAt = document.getElementById("humidityUpdatedAt");
+    const systemModeValue = document.getElementById("systemModeValue");
+    const systemModeStatus = document.getElementById("systemModeStatus");
+    const systemModeUpdatedAt = document.getElementById("systemModeUpdatedAt");
+    const systemModeSummary = document.getElementById("systemModeSummary");
+    const autoModeBtn = document.getElementById("autoModeBtn");
+    const manualModeBtn = document.getElementById("manualModeBtn");
+    const maintenanceModeBtn = document.getElementById("maintenanceModeBtn");
     const pumpOnBtn = document.getElementById("pumpOnBtn");
     const pumpOffBtn = document.getElementById("pumpOffBtn");
     const ledOnBtn = document.getElementById("ledOnBtn");
@@ -1978,6 +2012,7 @@
     const ALERT_STATE_KEY = "smartfarm-dashboard-alert-state";
     const EVENT_LOG_KEY = "smartfarm-dashboard-event-log";
     const JOURNAL_KEY = "smartfarm-dashboard-journal";
+    const SYSTEM_MODE_KEY = "smartfarm-dashboard-system-mode";
     const LED_SCHEDULE_DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
     const LED_SCHEDULE_DAY_LABELS = {
       mon: "월",
@@ -2028,6 +2063,7 @@
     let lastPumpLoggedState = null;
     let lastLedLoggedState = null;
     let ledSchedule = loadLedSchedule();
+    let systemMode = loadSystemMode();
 
     function hasAnyRecentSensorData() {
       return Object.values(lastSeenAt).some(Boolean);
@@ -2272,6 +2308,87 @@
           activeSignature: null
         };
       }
+    }
+
+    function loadSystemMode() {
+      try {
+        const raw = localStorage.getItem(SYSTEM_MODE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        const mode = parsed?.mode;
+
+        if (mode !== "auto" && mode !== "manual" && mode !== "maintenance") {
+          return {
+            mode: "manual",
+            updatedAt: null
+          };
+        }
+
+        return {
+          mode,
+          updatedAt: typeof parsed?.updatedAt === "number" ? parsed.updatedAt : null
+        };
+      } catch (error) {
+        console.error("system mode load failed:", error);
+        return {
+          mode: "manual",
+          updatedAt: null
+        };
+      }
+    }
+
+    function saveSystemMode() {
+      try {
+        localStorage.setItem(SYSTEM_MODE_KEY, JSON.stringify(systemMode));
+      } catch (error) {
+        console.error("system mode save failed:", error);
+      }
+    }
+
+    function updateSystemModeUI() {
+      const modeMap = {
+        auto: {
+          title: "자동 모드",
+          badge: "자동 제어 우선",
+          badgeClass: "status-badge connected",
+          summary: "Node-RED 자동 로직과 예약 실행 중심으로 운영합니다."
+        },
+        manual: {
+          title: "수동 모드",
+          badge: "직접 제어 가능",
+          badgeClass: "status-badge wet",
+          summary: "대시보드에서 펌프와 LED를 직접 제어하는 운영 모드입니다."
+        },
+        maintenance: {
+          title: "점검 모드",
+          badge: "수동 제어 잠금",
+          badgeClass: "status-badge caution",
+          summary: "센서 점검이나 배선 확인 중일 때 쓰는 보호 모드입니다."
+        }
+      };
+
+      const active = modeMap[systemMode.mode] || modeMap.manual;
+      systemModeValue.textContent = active.title;
+      systemModeStatus.textContent = active.badge;
+      systemModeStatus.className = active.badgeClass;
+      systemModeSummary.textContent = active.summary;
+      systemModeUpdatedAt.textContent = `마지막 변경: ${formatSavedDateTime(systemMode.updatedAt)}`;
+    }
+
+    function setSystemMode(nextMode) {
+      if (!nextMode || systemMode.mode === nextMode) {
+        updateSystemModeUI();
+        togglePumpButtons(Boolean(client && client.connected));
+        return;
+      }
+
+      systemMode = {
+        mode: nextMode,
+        updatedAt: Date.now()
+      };
+      saveSystemMode();
+      updateSystemModeUI();
+      togglePumpButtons(Boolean(client && client.connected));
+      addEventLog(`운영 모드 변경 · ${systemModeValue.textContent}`, "info", `system-mode:${nextMode}:${systemMode.updatedAt}`);
     }
 
     function loadLedSchedule() {
@@ -3921,10 +4038,11 @@
       버튼은 연결되었을 때만 누를 수 있게 합니다.
     */
     function togglePumpButtons(isConnected) {
-      pumpOnBtn.disabled = !isConnected;
-      pumpOffBtn.disabled = !isConnected;
-      ledOnBtn.disabled = !isConnected;
-      ledOffBtn.disabled = !isConnected;
+      const allowManualControl = isConnected && systemMode.mode === "manual";
+      pumpOnBtn.disabled = !allowManualControl;
+      pumpOffBtn.disabled = !allowManualControl;
+      ledOnBtn.disabled = !allowManualControl;
+      ledOffBtn.disabled = !allowManualControl;
     }
 
     /*
@@ -4255,6 +4373,18 @@
       publishLedState("OFF");
     });
 
+    autoModeBtn.addEventListener("click", function () {
+      setSystemMode("auto");
+    });
+
+    manualModeBtn.addEventListener("click", function () {
+      setSystemMode("manual");
+    });
+
+    maintenanceModeBtn.addEventListener("click", function () {
+      setSystemMode("maintenance");
+    });
+
     saveLedScheduleBtn.addEventListener("click", function () {
       const selectedDays = getSelectedLedScheduleDays();
 
@@ -4417,6 +4547,7 @@
     */
     togglePumpButtons(false);
     toggleConnectButton(false);
+    updateSystemModeUI();
     updateDateTimeCards();
     requestOutsideWeather();
     journalDateInput.value = getLocalDateKey(Date.now());
