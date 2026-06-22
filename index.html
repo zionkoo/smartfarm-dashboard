@@ -1410,6 +1410,24 @@
       </article>
 
       <article class="card control-card">
+        <h2 class="card-title">관리자 모드</h2>
+        <div class="mode-state" id="adminModeValue">잠금 상태</div>
+        <div class="status-badge caution" id="adminModeStatus">제어 잠금</div>
+        <p class="timestamp" id="adminModeUpdatedAt">잠금 유지: 관리자 확인 필요</p>
+        <div class="history-toolbar">
+          <div class="field field-wide">
+            <label for="adminPasswordInput">관리자 비밀번호</label>
+            <input id="adminPasswordInput" type="password" placeholder="처음이면 비밀번호를 설정하고, 이후에는 입력 후 잠금 해제" />
+          </div>
+        </div>
+        <div class="controls">
+          <button class="btn-connect" id="unlockAdminBtn" type="button">잠금 해제 / 설정</button>
+          <button class="btn-clear" id="lockAdminBtn" type="button">다시 잠그기</button>
+        </div>
+        <p class="meta" id="adminModeSummary">제어 버튼, 예약 저장, 운영 모드 변경은 관리자 잠금 해제 후에만 가능합니다.</p>
+      </article>
+
+      <article class="card control-card">
         <h2 class="card-title">운영 모드</h2>
         <div class="mode-state" id="systemModeValue">수동 모드</div>
         <div class="status-badge wet" id="systemModeStatus">직접 제어 가능</div>
@@ -1929,6 +1947,13 @@
     const humidityStatus = document.getElementById("humidityStatus");
     const humidityFreshness = document.getElementById("humidityFreshness");
     const humidityUpdatedAt = document.getElementById("humidityUpdatedAt");
+    const adminModeValue = document.getElementById("adminModeValue");
+    const adminModeStatus = document.getElementById("adminModeStatus");
+    const adminModeUpdatedAt = document.getElementById("adminModeUpdatedAt");
+    const adminModeSummary = document.getElementById("adminModeSummary");
+    const adminPasswordInput = document.getElementById("adminPasswordInput");
+    const unlockAdminBtn = document.getElementById("unlockAdminBtn");
+    const lockAdminBtn = document.getElementById("lockAdminBtn");
     const systemModeValue = document.getElementById("systemModeValue");
     const systemModeStatus = document.getElementById("systemModeStatus");
     const systemModeUpdatedAt = document.getElementById("systemModeUpdatedAt");
@@ -2013,6 +2038,9 @@
     const EVENT_LOG_KEY = "smartfarm-dashboard-event-log";
     const JOURNAL_KEY = "smartfarm-dashboard-journal";
     const SYSTEM_MODE_KEY = "smartfarm-dashboard-system-mode";
+    const ADMIN_PASSWORD_KEY = "smartfarm-dashboard-admin-password";
+    const ADMIN_SESSION_KEY = "smartfarm-dashboard-admin-session";
+    const ADMIN_SESSION_DURATION_MS = 10 * 60 * 1000;
     const LED_SCHEDULE_DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
     const LED_SCHEDULE_DAY_LABELS = {
       mon: "월",
@@ -2064,6 +2092,7 @@
     let lastLedLoggedState = null;
     let ledSchedule = loadLedSchedule();
     let systemMode = loadSystemMode();
+    let adminSession = loadAdminSession();
 
     function hasAnyRecentSensorData() {
       return Object.values(lastSeenAt).some(Boolean);
@@ -2336,6 +2365,169 @@
       }
     }
 
+    function loadAdminPassword() {
+      try {
+        const raw = localStorage.getItem(ADMIN_PASSWORD_KEY);
+        return typeof raw === "string" ? raw : "";
+      } catch (error) {
+        console.error("admin password load failed:", error);
+        return "";
+      }
+    }
+
+    function saveAdminPassword(password) {
+      try {
+        localStorage.setItem(ADMIN_PASSWORD_KEY, password);
+      } catch (error) {
+        console.error("admin password save failed:", error);
+      }
+    }
+
+    function loadAdminSession() {
+      try {
+        const raw = localStorage.getItem(ADMIN_SESSION_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return {
+          unlocked: Boolean(parsed?.unlocked),
+          expiresAt: typeof parsed?.expiresAt === "number" ? parsed.expiresAt : null
+        };
+      } catch (error) {
+        console.error("admin session load failed:", error);
+        return {
+          unlocked: false,
+          expiresAt: null
+        };
+      }
+    }
+
+    function saveAdminSession() {
+      try {
+        localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(adminSession));
+      } catch (error) {
+        console.error("admin session save failed:", error);
+      }
+    }
+
+    function isAdminUnlocked() {
+      if (!adminSession.unlocked || !adminSession.expiresAt) {
+        return false;
+      }
+
+      if (Date.now() > adminSession.expiresAt) {
+        adminSession.unlocked = false;
+        adminSession.expiresAt = null;
+        saveAdminSession();
+        return false;
+      }
+
+      return true;
+    }
+
+    function formatRemainingTime(ms) {
+      const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    function updateAdminModeUI() {
+      const savedPassword = loadAdminPassword();
+      const unlocked = isAdminUnlocked();
+
+      if (!savedPassword) {
+        adminModeValue.textContent = "초기 설정 필요";
+        adminModeStatus.textContent = "비밀번호 미설정";
+        adminModeStatus.className = "status-badge waiting";
+        adminModeUpdatedAt.textContent = "잠금 상태: 비밀번호를 먼저 설정해주세요";
+        adminModeSummary.textContent = "처음 한 번 관리자 비밀번호를 설정하면, 이후 제어 작업 전 잠금 해제가 필요합니다.";
+        unlockAdminBtn.textContent = "비밀번호 설정";
+        lockAdminBtn.disabled = true;
+        return;
+      }
+
+      lockAdminBtn.disabled = !unlocked;
+
+      if (unlocked) {
+        adminModeValue.textContent = "관리자 해제";
+        adminModeStatus.textContent = "제어 허용";
+        adminModeStatus.className = "status-badge connected";
+        adminModeUpdatedAt.textContent = `잠금 해제 유지: ${formatRemainingTime(adminSession.expiresAt - Date.now())}`;
+        adminModeSummary.textContent = "현재 관리자 제어가 허용된 상태입니다. 중요한 작업이 끝나면 다시 잠그는 것을 권장합니다.";
+        unlockAdminBtn.textContent = "잠금 연장";
+        return;
+      }
+
+      adminModeValue.textContent = "잠금 상태";
+      adminModeStatus.textContent = "제어 잠금";
+      adminModeStatus.className = "status-badge caution";
+      adminModeUpdatedAt.textContent = "잠금 유지: 관리자 확인 필요";
+      adminModeSummary.textContent = "제어 버튼, 예약 저장, 운영 모드 변경은 관리자 잠금 해제 후에만 가능합니다.";
+      unlockAdminBtn.textContent = "잠금 해제";
+    }
+
+    function lockAdminMode(logIt) {
+      adminSession = {
+        unlocked: false,
+        expiresAt: null
+      };
+      saveAdminSession();
+      updateAdminModeUI();
+      togglePumpButtons(Boolean(client && client.connected));
+      if (logIt) {
+        addEventLog("관리자 모드 잠금", "warning", "admin:locked");
+      }
+    }
+
+    function unlockAdminMode() {
+      const passwordText = adminPasswordInput.value.trim();
+      const savedPassword = loadAdminPassword();
+
+      if (!passwordText) {
+        alert(savedPassword ? "관리자 비밀번호를 입력해주세요." : "새 관리자 비밀번호를 먼저 입력해주세요.");
+        return;
+      }
+
+      if (!savedPassword) {
+        saveAdminPassword(passwordText);
+        adminSession = {
+          unlocked: true,
+          expiresAt: Date.now() + ADMIN_SESSION_DURATION_MS
+        };
+        saveAdminSession();
+        adminPasswordInput.value = "";
+        updateAdminModeUI();
+        togglePumpButtons(Boolean(client && client.connected));
+        addEventLog("관리자 비밀번호 설정 및 잠금 해제", "success", "admin:setup");
+        return;
+      }
+
+      if (passwordText !== savedPassword) {
+        alert("관리자 비밀번호가 일치하지 않습니다.");
+        return;
+      }
+
+      adminSession = {
+        unlocked: true,
+        expiresAt: Date.now() + ADMIN_SESSION_DURATION_MS
+      };
+      saveAdminSession();
+      adminPasswordInput.value = "";
+      updateAdminModeUI();
+      togglePumpButtons(Boolean(client && client.connected));
+      addEventLog("관리자 모드 잠금 해제", "success", `admin:unlock:${adminSession.expiresAt}`);
+    }
+
+    function requireAdminAccess() {
+      if (!isAdminUnlocked()) {
+        updateAdminModeUI();
+        togglePumpButtons(Boolean(client && client.connected));
+        alert("관리자 모드 잠금 해제 후 이용해주세요.");
+        return false;
+      }
+
+      return true;
+    }
+
     function saveSystemMode() {
       try {
         localStorage.setItem(SYSTEM_MODE_KEY, JSON.stringify(systemMode));
@@ -2375,6 +2567,10 @@
     }
 
     function setSystemMode(nextMode) {
+      if (!requireAdminAccess()) {
+        return;
+      }
+
       if (!nextMode || systemMode.mode === nextMode) {
         updateSystemModeUI();
         togglePumpButtons(Boolean(client && client.connected));
@@ -4293,6 +4489,10 @@
       4. 버튼 클릭 시 pump 토픽으로 ON / OFF publish
     */
     function publishPumpState(state) {
+      if (!requireAdminAccess()) {
+        return;
+      }
+
       if (!client || !client.connected) {
         alert("MQTT 브로커에 연결되어 있지 않습니다.");
         return;
@@ -4308,6 +4508,10 @@
     }
 
     function publishLedState(state, silent) {
+      if (!silent && !requireAdminAccess()) {
+        return false;
+      }
+
       if (!client || !client.connected) {
         if (!silent) {
           alert("MQTT 브로커에 연결되어 있지 않습니다.");
@@ -4385,7 +4589,19 @@
       setSystemMode("maintenance");
     });
 
+    unlockAdminBtn.addEventListener("click", function () {
+      unlockAdminMode();
+    });
+
+    lockAdminBtn.addEventListener("click", function () {
+      lockAdminMode(true);
+    });
+
     saveLedScheduleBtn.addEventListener("click", function () {
+      if (!requireAdminAccess()) {
+        return;
+      }
+
       const selectedDays = getSelectedLedScheduleDays();
 
       if ((ledOnTimeInput.value || ledOffTimeInput.value) && !selectedDays.length) {
@@ -4405,6 +4621,10 @@
     });
 
     clearLedScheduleBtn.addEventListener("click", function () {
+      if (!requireAdminAccess()) {
+        return;
+      }
+
       ledSchedule = {
         onTime: "",
         offTime: "",
@@ -4547,6 +4767,7 @@
     */
     togglePumpButtons(false);
     toggleConnectButton(false);
+    updateAdminModeUI();
     updateSystemModeUI();
     updateDateTimeCards();
     requestOutsideWeather();
@@ -4569,6 +4790,7 @@
     window.addEventListener("scroll", updateActiveMobileNav, { passive: true });
     setInterval(function () {
       updateDateTimeCards();
+      updateAdminModeUI();
       checkLedSchedule();
     }, 1000);
     setInterval(function () {
