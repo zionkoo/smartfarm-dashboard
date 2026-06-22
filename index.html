@@ -1396,17 +1396,6 @@
       </article>
 
       <article class="card metric-card">
-        <h2 class="card-title">토양 수분 값</h2>
-        <div class="value-row">
-          <p class="big-value" id="soilValue">--</p>
-          <span class="unit">raw</span>
-        </div>
-        <div class="status-badge neutral" id="soilFreshness">수신 대기</div>
-        <p class="timestamp" id="soilUpdatedAt">마지막 수신: --</p>
-        <p class="meta">토픽: <code>farm/soil</code></p>
-      </article>
-
-      <article class="card metric-card">
         <h2 class="card-title">CO2 농도</h2>
         <div class="value-row">
           <p class="big-value" id="co2Value">--</p>
@@ -1551,16 +1540,20 @@
         </div>
         <div class="alert-grid">
           <div class="alert-item">
-            <div class="alert-item-label">토양 상태</div>
-            <div class="alert-item-value" id="alertSoilDetail">데이터 대기</div>
-          </div>
-          <div class="alert-item">
             <div class="alert-item-label">온도 상태</div>
             <div class="alert-item-value" id="alertTempDetail">데이터 대기</div>
           </div>
           <div class="alert-item">
             <div class="alert-item-label">습도 상태</div>
             <div class="alert-item-value" id="alertHumidityDetail">데이터 대기</div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-item-label">CO2 상태</div>
+            <div class="alert-item-value" id="alertCo2Detail">데이터 대기</div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-item-label">LED 상태</div>
+            <div class="alert-item-value" id="alertLedDetail">데이터 대기</div>
           </div>
           <div class="alert-item">
             <div class="alert-item-label">마지막 이상 감지</div>
@@ -1572,7 +1565,7 @@
           </div>
         </div>
         <p class="alert-note">
-          대시보드는 현재 수신한 온도와 습도 기준으로 경고를 표시합니다. 실제 텔레그램 발송은 Node-RED 설정 기준으로 동작합니다.
+          대시보드는 현재 수신한 온도, 습도, CO2 기준으로 경고를 표시합니다. 실제 텔레그램 발송은 Node-RED 설정 기준으로 동작합니다.
         </p>
       </article>
 
@@ -1935,9 +1928,10 @@
     const dataStatusDisplay = document.getElementById("dataStatusDisplay");
     const alertOverallStatus = document.getElementById("alertOverallStatus");
     const alertSummaryText = document.getElementById("alertSummaryText");
-    const alertSoilDetail = document.getElementById("alertSoilDetail");
     const alertTempDetail = document.getElementById("alertTempDetail");
     const alertHumidityDetail = document.getElementById("alertHumidityDetail");
+    const alertCo2Detail = document.getElementById("alertCo2Detail");
+    const alertLedDetail = document.getElementById("alertLedDetail");
     const alertLastTriggeredAt = document.getElementById("alertLastTriggeredAt");
     const eventLogPreview = document.getElementById("eventLogPreview");
     const eventLogCount = document.getElementById("eventLogCount");
@@ -2982,44 +2976,80 @@
       };
     }
 
-    function getSoilAlertInfo() {
-      if (currentSoil === null || currentSoil === undefined || currentSoil === "") {
+    function getCo2AlertInfo() {
+      const value = currentSensorSnapshot.co2;
+
+      if (value === null || value === undefined || value === "") {
         return {
           level: "waiting",
           text: "데이터 대기"
         };
       }
 
-      const value = Number(currentSoil);
+      const numericValue = Number(value);
 
-      if (Number.isNaN(value)) {
+      if (Number.isNaN(numericValue)) {
         return {
           level: "waiting",
           text: "데이터 대기"
         };
       }
 
-      if (value <= 500) {
+      if (numericValue < 400) {
         return {
           level: "alert",
-          text: `${value} · 건조`
+          text: `${numericValue.toFixed(1)} ppm · 낮음`
+        };
+      }
+
+      if (numericValue <= 1200) {
+        return {
+          level: "normal",
+          text: `${numericValue.toFixed(1)} ppm · 적정`
+        };
+      }
+
+      if (numericValue <= 1500) {
+        return {
+          level: "caution",
+          text: `${numericValue.toFixed(1)} ppm · 주의`
         };
       }
 
       return {
+        level: "alert",
+        text: `${numericValue.toFixed(1)} ppm · 높음`
+      };
+    }
+
+    function getLedAlertInfo() {
+      const value = currentSensorSnapshot.led;
+
+      if (value === null || value === undefined || value === "") {
+        return {
+          level: "waiting",
+          text: "데이터 대기"
+        };
+      }
+
+      const normalized = String(value).trim().toUpperCase();
+
+      return {
         level: "normal",
-        text: `${value} · 정상`
+        text: normalized === "ON" ? "ON · 점등 중" : "OFF · 꺼짐"
       };
     }
 
     function refreshAlertUI() {
-      const soilInfo = getSoilAlertInfo();
       const tempInfo = getTempAlertInfo();
       const humidityInfo = getHumidityAlertInfo();
+      const co2Info = getCo2AlertInfo();
+      const ledInfo = getLedAlertInfo();
       const sensorInfos = [
-        { name: "토양", info: soilInfo },
         { name: "온도", info: tempInfo },
-        { name: "습도", info: humidityInfo }
+        { name: "습도", info: humidityInfo },
+        { name: "CO2", info: co2Info },
+        { name: "LED", info: ledInfo }
       ];
       const infos = sensorInfos.map(function (item) {
         return item.info;
@@ -3035,13 +3065,14 @@
           return item.name;
         });
       const hasWaiting = availableInfos.length === 0;
-      const hasAlert = soilInfo.level === "alert" || tempInfo.level === "alert" || humidityInfo.level === "alert";
-      const hasCaution = tempInfo.level === "caution" || humidityInfo.level === "caution";
-      const alertSignature = `${soilInfo.level}:${soilInfo.text}|${tempInfo.level}:${tempInfo.text}|${humidityInfo.level}:${humidityInfo.text}`;
+      const hasAlert = tempInfo.level === "alert" || humidityInfo.level === "alert" || co2Info.level === "alert";
+      const hasCaution = tempInfo.level === "caution" || humidityInfo.level === "caution" || co2Info.level === "caution";
+      const alertSignature = `${tempInfo.level}:${tempInfo.text}|${humidityInfo.level}:${humidityInfo.text}|${co2Info.level}:${co2Info.text}|${ledInfo.level}:${ledInfo.text}`;
 
-      alertSoilDetail.textContent = soilInfo.text;
       alertTempDetail.textContent = tempInfo.text;
       alertHumidityDetail.textContent = humidityInfo.text;
+      alertCo2Detail.textContent = co2Info.text;
+      alertLedDetail.textContent = ledInfo.text;
       alertLastTriggeredAt.textContent = formatSavedDateTime(alertState.lastTriggeredAt);
 
       if (hasAlert) {
@@ -3050,29 +3081,29 @@
           alertState.activeSignature = alertSignature;
           saveAlertState();
           alertLastTriggeredAt.textContent = formatSavedDateTime(alertState.lastTriggeredAt);
-          const overallLabel = [soilInfo, tempInfo, humidityInfo].filter(function (item) {
+          const overallLabel = [tempInfo, humidityInfo, co2Info].filter(function (item) {
             return item.level === "alert";
           }).length >= 2
             ? "복합 경고"
-            : soilInfo.level === "alert"
-              ? "토양 경고"
             : tempInfo.level === "alert"
               ? "온도 경고"
-              : "습도 경고";
-          addEventLog(`${overallLabel} · ${soilInfo.text} / ${tempInfo.text} / ${humidityInfo.text}`, "error", `alert:${alertSignature}`);
+              : humidityInfo.level === "alert"
+                ? "습도 경고"
+                : "CO2 경고";
+          addEventLog(`${overallLabel} · ${tempInfo.text} / ${humidityInfo.text} / ${co2Info.text} / ${ledInfo.text}`, "error", `alert:${alertSignature}`);
         }
 
-        alertOverallStatus.textContent = [soilInfo, tempInfo, humidityInfo].filter(function (item) {
+        alertOverallStatus.textContent = [tempInfo, humidityInfo, co2Info].filter(function (item) {
           return item.level === "alert";
         }).length >= 2
           ? "복합 경고"
-          : soilInfo.level === "alert"
-            ? "토양 경고"
           : tempInfo.level === "alert"
             ? "온도 경고"
-            : "습도 경고";
+            : humidityInfo.level === "alert"
+              ? "습도 경고"
+              : "CO2 경고";
         alertOverallStatus.className = "status-display failed";
-        alertSummaryText.textContent = "적정 범위를 벗어난 값이 감지되어 있습니다. 토양과 온습도 상태를 함께 확인해보세요.";
+        alertSummaryText.textContent = "적정 범위를 벗어난 값이 감지되어 있습니다. 온도, 습도, CO2 상태를 함께 확인해보세요.";
         alertSummaryText.className = "help-banner error";
         return;
       }
@@ -3083,12 +3114,16 @@
           alertState.activeSignature = alertSignature;
           saveAlertState();
           alertLastTriggeredAt.textContent = formatSavedDateTime(alertState.lastTriggeredAt);
-          addEventLog(`주의 상태 · ${tempInfo.text} / ${humidityInfo.text}`, "warning", `alert:${alertSignature}`);
+          addEventLog(`주의 상태 · ${tempInfo.text} / ${humidityInfo.text} / ${co2Info.text}`, "warning", `alert:${alertSignature}`);
         }
 
-        alertOverallStatus.textContent = tempInfo.level === "caution" ? "온도 주의" : "주의";
+        alertOverallStatus.textContent = tempInfo.level === "caution"
+          ? "온도 주의"
+          : humidityInfo.level === "caution"
+            ? "습도 주의"
+            : "CO2 주의";
         alertOverallStatus.className = "status-display connecting";
-        alertSummaryText.textContent = "적정 범위를 조금 벗어난 값이 감지되었습니다. 온도와 습도 추이를 한 번 더 확인해보세요.";
+        alertSummaryText.textContent = "적정 범위를 조금 벗어난 값이 감지되었습니다. 온도, 습도, CO2 추이를 한 번 더 확인해보세요.";
         alertSummaryText.className = "help-banner";
         return;
       }
@@ -3100,7 +3135,7 @@
         }
         alertOverallStatus.textContent = "대기 중";
         alertOverallStatus.className = "status-display waiting";
-        alertSummaryText.textContent = "아직 센서 데이터가 들어오지 않았습니다. 토양, 온도, 습도 값을 기다리고 있습니다.";
+        alertSummaryText.textContent = "아직 센서 데이터가 들어오지 않았습니다. 온도, 습도, CO2, LED 상태를 기다리고 있습니다.";
         alertSummaryText.className = "help-banner";
         return;
       }
@@ -3118,13 +3153,13 @@
       }
 
       if (alertState.activeSignature !== null) {
-        addEventLog("토양/온습도 정상 복귀", "success", "alert:normal");
+        addEventLog("온습도/CO2 정상 복귀", "success", "alert:normal");
         alertState.activeSignature = null;
         saveAlertState();
       }
       alertOverallStatus.textContent = "정상";
       alertOverallStatus.className = "status-display connected";
-      alertSummaryText.textContent = "현재 토양과 온습도가 모두 적정 범위 안에 있습니다. 텔레그램 알림은 이상 상태가 생길 때만 동작합니다.";
+      alertSummaryText.textContent = "현재 온도, 습도, CO2가 모두 적정 범위 안에 있습니다. 텔레그램 알림은 이상 상태가 생길 때만 동작합니다.";
       alertSummaryText.className = "help-banner success";
     }
 
@@ -3433,6 +3468,10 @@
       const item = map[type];
       const lastSeen = lastSeenAt[type];
 
+      if (!item || !item.badge || !item.text) {
+        return;
+      }
+
       item.text.textContent = `마지막 수신: ${formatLastSeen(lastSeen)}`;
 
       if (!lastSeen) {
@@ -3490,7 +3529,9 @@
       새 토양 수분 데이터를 화면과 그래프에 반영합니다.
     */
     function updateSoilUI(value) {
-      soilValue.textContent = value;
+      if (soilValue) {
+        soilValue.textContent = value;
+      }
       currentSoil = value;
       currentSensorSnapshot.soil = value;
       markLastSeen("soil");
@@ -3521,6 +3562,7 @@
       ledState.textContent = normalized === "ON" ? "ON" : "OFF";
       currentSensorSnapshot.led = normalized === "ON" ? "ON" : "OFF";
       markLastSeen("led");
+      refreshAlertUI();
       pushSensorHistoryPoint();
 
       if (lastLedLoggedState !== normalized) {
@@ -3544,6 +3586,7 @@
       currentSensorSnapshot.co2 = Number.isInteger(numericValue) ? numericValue : Number(numericValue.toFixed(1));
       markLastSeen("co2");
       co2StatusUpdatedAt.textContent = `마지막 수신: ${formatLastSeen(lastSeenAt.co2)}`;
+      refreshAlertUI();
       pushSensorHistoryPoint();
 
       if (numericValue < 400) {
