@@ -1619,6 +1619,14 @@
             <div class="daily-summary-value" id="climateHumiditySummary">평균 - / 최고 - / 최저 -</div>
           </div>
           <div class="daily-summary-card">
+            <div class="daily-summary-label">EC 요약</div>
+            <div class="daily-summary-value" id="climateEcSummary">평균 - / 최고 - / 최저 -</div>
+          </div>
+          <div class="daily-summary-card">
+            <div class="daily-summary-label">pH 요약</div>
+            <div class="daily-summary-value" id="climatePhSummary">평균 - / 최고 - / 최저 -</div>
+          </div>
+          <div class="daily-summary-card">
             <div class="daily-summary-label">날짜 요약</div>
             <div class="daily-summary-value" id="climateDateSummary">기록 없음</div>
           </div>
@@ -1641,9 +1649,10 @@
             <thead>
               <tr>
                 <th>시간</th>
-                <th>평균 온도</th>
-                <th>평균 습도</th>
-                <th>기록 수</th>
+                <th>온도</th>
+                <th>습도</th>
+                <th>EC</th>
+                <th>pH</th>
               </tr>
             </thead>
             <tbody id="climateHourlyRows"></tbody>
@@ -1654,7 +1663,7 @@
           <button class="btn-clear" id="downloadSensorCsvBtn" type="button">EC·pH·온습도 CSV 다운로드</button>
           <button class="btn-clear" id="clearClimateHistoryBtn" type="button">온습도 기록 지우기</button>
         </div>
-        <p class="meta">선택한 날짜 기준으로 온·습도 요약을 보고, EC·pH·온습도 데이터를 CSV로 내려받을 수 있습니다.</p>
+        <p class="meta">선택한 날짜 기준으로 온·습도·EC·pH 요약과 시간대별 값을 확인하고 CSV로 내려받을 수 있습니다.</p>
       </details>
 
       <details class="card settings-card collapsible-card" id="settingsSection">
@@ -1918,6 +1927,8 @@
     const toggleHourlyTableBtn = document.getElementById("toggleHourlyTableBtn");
     const climateTempSummary = document.getElementById("climateTempSummary");
     const climateHumiditySummary = document.getElementById("climateHumiditySummary");
+    const climateEcSummary = document.getElementById("climateEcSummary");
+    const climatePhSummary = document.getElementById("climatePhSummary");
     const climateDateSummary = document.getElementById("climateDateSummary");
     const climateWeeklyTempSummary = document.getElementById("climateWeeklyTempSummary");
     const climateWeeklyHumiditySummary = document.getElementById("climateWeeklyHumiditySummary");
@@ -3266,6 +3277,28 @@
       return String(value);
     }
 
+    function getNumericValues(entries, key) {
+      return entries
+        .map(function (entry) {
+          return Number(entry[key]);
+        })
+        .filter(function (value) {
+          return !Number.isNaN(value);
+        });
+    }
+
+    function formatSummaryStat(values, unit) {
+      if (!values.length) {
+        return "평균 - / 최고 - / 최저 -";
+      }
+
+      const average = values.reduce(function (sum, value) {
+        return sum + value;
+      }, 0) / values.length;
+
+      return `평균 ${average.toFixed(1)} ${unit} / 최고 ${Math.max(...values).toFixed(1)} ${unit} / 최저 ${Math.min(...values).toFixed(1)} ${unit}`;
+    }
+
     function downloadSensorCsv() {
       const selectedDate = climateDateInput.value || getLatestSensorDateKey();
       const dayEntries = sensorHistory.filter(function (entry) {
@@ -3322,59 +3355,59 @@
 
     function renderHourlyClimateTable() {
       const selectedDate = climateDateInput.value || getLatestClimateDateKey();
+      const climateDayEntries = climateHistory.filter(function (entry) {
+        return getLocalDateKey(entry.ts) === selectedDate;
+      });
+      const sensorDayEntries = sensorHistory.filter(function (entry) {
+        return getLocalDateKey(entry.ts) === selectedDate;
+      });
       const hourlyBuckets = Array.from({ length: 24 }, function (_, hour) {
         return {
           hour,
-          tempSum: 0,
-          humiditySum: 0,
-          count: 0
+          temp: null,
+          humidity: null,
+          ec: null,
+          ph: null
         };
       });
 
-      const dayEntries = climateHistory.filter(function (entry) {
-        return getLocalDateKey(entry.ts) === selectedDate;
-      });
-
-      dayEntries.forEach(function (entry) {
+      sensorDayEntries.forEach(function (entry) {
         const hour = new Date(entry.ts).getHours();
-        hourlyBuckets[hour].tempSum += Number(entry.temp);
-        hourlyBuckets[hour].humiditySum += Number(entry.humidity);
-        hourlyBuckets[hour].count += 1;
+        hourlyBuckets[hour].temp = entry.temp ?? null;
+        hourlyBuckets[hour].humidity = entry.humidity ?? null;
+        hourlyBuckets[hour].ec = entry.ec ?? null;
+        hourlyBuckets[hour].ph = entry.ph ?? null;
       });
 
-      climateDayCount.textContent = `${dayEntries.length}건`;
+      climateDayCount.textContent = `${sensorDayEntries.length || climateDayEntries.length}건`;
 
-      if (!dayEntries.length) {
+      if (!climateDayEntries.length && !sensorDayEntries.length) {
         climateTempSummary.textContent = "평균 - / 최고 - / 최저 -";
         climateHumiditySummary.textContent = "평균 - / 최고 - / 최저 -";
+        climateEcSummary.textContent = "평균 - / 최고 - / 최저 -";
+        climatePhSummary.textContent = "평균 - / 최고 - / 최저 -";
         climateDateSummary.textContent = `${selectedDate} 기록 없음`;
       } else {
-        const tempValues = dayEntries.map(function (entry) {
-          return Number(entry.temp);
-        });
-        const humidityValues = dayEntries.map(function (entry) {
-          return Number(entry.humidity);
-        });
+        const tempValues = getNumericValues(climateDayEntries.length ? climateDayEntries : sensorDayEntries, "temp");
+        const humidityValues = getNumericValues(climateDayEntries.length ? climateDayEntries : sensorDayEntries, "humidity");
+        const ecValues = getNumericValues(sensorDayEntries, "ec");
+        const phValues = getNumericValues(sensorDayEntries, "ph");
 
-        const tempAvg = tempValues.reduce(function (sum, value) {
-          return sum + value;
-        }, 0) / tempValues.length;
-        const humidityAvg = humidityValues.reduce(function (sum, value) {
-          return sum + value;
-        }, 0) / humidityValues.length;
-
-        climateTempSummary.textContent = `평균 ${tempAvg.toFixed(1)} °C / 최고 ${Math.max(...tempValues).toFixed(1)} °C / 최저 ${Math.min(...tempValues).toFixed(1)} °C`;
-        climateHumiditySummary.textContent = `평균 ${humidityAvg.toFixed(1)} % / 최고 ${Math.max(...humidityValues).toFixed(1)} % / 최저 ${Math.min(...humidityValues).toFixed(1)} %`;
-        climateDateSummary.textContent = `${selectedDate} / 총 ${dayEntries.length}건`;
+        climateTempSummary.textContent = formatSummaryStat(tempValues, "°C");
+        climateHumiditySummary.textContent = formatSummaryStat(humidityValues, "%");
+        climateEcSummary.textContent = formatSummaryStat(ecValues, "mS/cm");
+        climatePhSummary.textContent = formatSummaryStat(phValues, "pH");
+        climateDateSummary.textContent = `${selectedDate} / 온습도 ${climateDayEntries.length}건 / 환경 ${sensorDayEntries.length}건`;
       }
 
       climateHourlyRows.innerHTML = hourlyBuckets.map(function (bucket) {
         const hourLabel = `${String(bucket.hour).padStart(2, "0")}:00`;
-        const avgTemp = bucket.count ? `${(bucket.tempSum / bucket.count).toFixed(1)} °C` : "-";
-        const avgHumidity = bucket.count ? `${(bucket.humiditySum / bucket.count).toFixed(1)} %` : "-";
-        const countText = bucket.count ? `${bucket.count}개` : "-";
+        const tempText = bucket.temp === null || bucket.temp === undefined || bucket.temp === "" ? "-" : `${Number(bucket.temp).toFixed(1)} °C`;
+        const humidityText = bucket.humidity === null || bucket.humidity === undefined || bucket.humidity === "" ? "-" : `${Number(bucket.humidity).toFixed(1)} %`;
+        const ecText = bucket.ec === null || bucket.ec === undefined || bucket.ec === "" || Number.isNaN(Number(bucket.ec)) ? "-" : `${Number(bucket.ec).toFixed(2)} mS/cm`;
+        const phText = bucket.ph === null || bucket.ph === undefined || bucket.ph === "" || Number.isNaN(Number(bucket.ph)) ? "-" : `${Number(bucket.ph).toFixed(1)} pH`;
 
-        return `<tr><td>${hourLabel}</td><td>${avgTemp}</td><td>${avgHumidity}</td><td>${countText}</td></tr>`;
+        return `<tr><td>${hourLabel}</td><td>${tempText}</td><td>${humidityText}</td><td>${ecText}</td><td>${phText}</td></tr>`;
       }).join("");
     }
 
