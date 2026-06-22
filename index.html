@@ -712,7 +712,26 @@
       background: #ffffff;
     }
 
+    .field textarea {
+      width: 100%;
+      border: 1px solid rgba(23, 59, 45, 0.12);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 1rem;
+      color: var(--text-main);
+      background: #ffffff;
+      min-height: 120px;
+      resize: vertical;
+      font-family: inherit;
+      line-height: 1.5;
+    }
+
     .field input:focus {
+      outline: 2px solid rgba(47, 158, 68, 0.2);
+      border-color: #2f9e44;
+    }
+
+    .field textarea:focus {
       outline: 2px solid rgba(47, 158, 68, 0.2);
       border-color: #2f9e44;
     }
@@ -1087,6 +1106,46 @@
       color: var(--text-soft);
       font-weight: 700;
       border: 1px solid rgba(23, 59, 45, 0.08);
+    }
+
+    .journal-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .journal-item {
+      padding: 16px 18px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #f7fbf4, #ffffff);
+      border: 1px solid rgba(23, 59, 45, 0.08);
+    }
+
+    .journal-item-head {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .journal-item-title {
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .journal-item-date {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--text-soft);
+    }
+
+    .journal-item-note {
+      color: var(--text-soft);
+      line-height: 1.6;
+      white-space: pre-wrap;
     }
 
     .help-banner {
@@ -1477,7 +1536,7 @@
       <details class="card history-card collapsible-card" id="historySection">
         <summary class="collapsible-summary">
           <div class="collapsible-summary-main">
-            <h2 class="card-title">온도 · 습도 시간대별 기록</h2>
+            <h2 class="card-title">환경 센서 일자별 기록</h2>
           </div>
           <div class="collapsible-summary-preview">요약 확인 후 필요할 때 펼쳐보기</div>
         </summary>
@@ -1537,20 +1596,12 @@
           </table>
         </div>
         <div class="history-actions">
-          <button class="btn-connect" id="downloadClimateCsvBtn" type="button">CSV 다운로드</button>
-          <button class="btn-clear" id="downloadSensorCsvBtn" type="button">전체 센서 CSV 다운로드</button>
+          <button class="btn-connect" id="downloadClimateCsvBtn" type="button">온·습도 CSV 다운로드</button>
+          <button class="btn-clear" id="downloadSensorCsvBtn" type="button">EC·pH·온습도 CSV 다운로드</button>
           <button class="btn-clear" id="clearClimateHistoryBtn" type="button">온습도 기록 지우기</button>
         </div>
-        <p class="meta">온도·습도 기록과 함께 전체 센서값도 선택한 날짜 기준 CSV로 내려받을 수 있습니다.</p>
+        <p class="meta">선택한 날짜 기준으로 온·습도 요약을 보고, EC·pH·온습도 데이터를 CSV로 내려받을 수 있습니다.</p>
       </details>
-
-      <article class="card chart-card">
-        <h2 class="card-title">실시간 토양 수분 그래프</h2>
-        <div class="chart-wrap">
-          <canvas id="soilChart"></canvas>
-        </div>
-        <p class="meta">최근 데이터 20개 이상을 유지하면서 시간 흐름에 따라 갱신됩니다.</p>
-      </article>
 
       <details class="card settings-card collapsible-card" id="settingsSection">
         <summary class="collapsible-summary">
@@ -1609,20 +1660,37 @@
         </ul>
       </article>
 
-      <details class="card guide-card collapsible-card">
+      <details class="card guide-card collapsible-card" id="journalSection">
         <summary class="collapsible-summary">
-          <h2 class="card-title">센서 수신 테스트</h2>
+          <div class="collapsible-summary-main">
+            <h2 class="card-title">재배일지</h2>
+          </div>
+          <div class="collapsible-summary-preview" id="journalPreview">최근 기록 없음</div>
         </summary>
-        <p class="meta">HiveMQ Web Client 없이도 아래 버튼으로 테스트 메시지를 publish할 수 있습니다.</p>
-        <div class="controls">
-          <button class="btn-test" id="soilDryTestBtn" type="button">Soil 430</button>
-          <button class="btn-test" id="soilWetTestBtn" type="button">Soil 620</button>
-          <button class="btn-test" id="co2TestBtn" type="button">CO2 850</button>
-          <button class="btn-test" id="ecTestBtn" type="button">EC 1.7</button>
-          <button class="btn-test" id="phTestBtn" type="button">pH 5.8</button>
-          <button class="btn-test" id="tempTestBtn" type="button">Temp 23</button>
-          <button class="btn-test" id="humidityTestBtn" type="button">Humidity 55</button>
+        <div class="history-summary">
+          <div class="summary-pill">기록 수 <strong id="journalCount">0개</strong></div>
+          <div class="summary-pill">마지막 작성 <strong id="journalLatest">--</strong></div>
         </div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="journalDateInput">날짜</label>
+            <input id="journalDateInput" type="date" />
+          </div>
+          <div class="field">
+            <label for="journalTitleInput">제목</label>
+            <input id="journalTitleInput" type="text" placeholder="예: 물주기, 비료, 상태 점검" />
+          </div>
+          <div class="field field-wide">
+            <label for="journalNoteInput">메모</label>
+            <textarea id="journalNoteInput" placeholder="오늘 관찰한 내용, 작업 내용, 특이사항을 적어두세요."></textarea>
+          </div>
+        </div>
+        <div class="history-actions">
+          <button class="btn-connect" id="saveJournalBtn" type="button">재배일지 저장</button>
+          <button class="btn-clear" id="clearJournalBtn" type="button">재배일지 지우기</button>
+        </div>
+        <div class="event-log-empty" id="journalEmpty">아직 작성된 재배일지가 없습니다. 날짜와 메모를 남겨두면 여기에 쌓입니다.</div>
+        <div class="journal-list is-hidden" id="journalList"></div>
       </details>
     </section>
   </main>
@@ -1772,13 +1840,6 @@
     const saveLedScheduleBtn = document.getElementById("saveLedScheduleBtn");
     const clearLedScheduleBtn = document.getElementById("clearLedScheduleBtn");
     const ledScheduleSummary = document.getElementById("ledScheduleSummary");
-    const soilDryTestBtn = document.getElementById("soilDryTestBtn");
-    const soilWetTestBtn = document.getElementById("soilWetTestBtn");
-    const co2TestBtn = document.getElementById("co2TestBtn");
-    const ecTestBtn = document.getElementById("ecTestBtn");
-    const phTestBtn = document.getElementById("phTestBtn");
-    const tempTestBtn = document.getElementById("tempTestBtn");
-    const humidityTestBtn = document.getElementById("humidityTestBtn");
     const hostInput = document.getElementById("hostInput");
     const portInput = document.getElementById("portInput");
     const pathInput = document.getElementById("pathInput");
@@ -1819,6 +1880,16 @@
     const eventLogEmpty = document.getElementById("eventLogEmpty");
     const eventLogList = document.getElementById("eventLogList");
     const clearEventLogBtn = document.getElementById("clearEventLogBtn");
+    const journalPreview = document.getElementById("journalPreview");
+    const journalCount = document.getElementById("journalCount");
+    const journalLatest = document.getElementById("journalLatest");
+    const journalDateInput = document.getElementById("journalDateInput");
+    const journalTitleInput = document.getElementById("journalTitleInput");
+    const journalNoteInput = document.getElementById("journalNoteInput");
+    const saveJournalBtn = document.getElementById("saveJournalBtn");
+    const clearJournalBtn = document.getElementById("clearJournalBtn");
+    const journalEmpty = document.getElementById("journalEmpty");
+    const journalList = document.getElementById("journalList");
     const loginHelpBanner = document.getElementById("loginHelpBanner");
     const STORAGE_KEY = "smartfarm-dashboard-login";
     const CLIMATE_HISTORY_KEY = "smartfarm-dashboard-climate-history";
@@ -1826,6 +1897,7 @@
     const LED_SCHEDULE_KEY = "smartfarm-dashboard-led-schedule";
     const ALERT_STATE_KEY = "smartfarm-dashboard-alert-state";
     const EVENT_LOG_KEY = "smartfarm-dashboard-event-log";
+    const JOURNAL_KEY = "smartfarm-dashboard-journal";
     const STALE_WARNING_MS = 30000;
     const STALE_DELAY_MS = 90000;
     const MAX_CLIMATE_POINTS = 288;
@@ -1860,6 +1932,7 @@
     let climateHistory = loadClimateHistory();
     let sensorHistory = loadSensorHistory();
     let eventLogs = loadEventLogs();
+    let journalEntries = loadJournalEntries();
     let deferredInstallPrompt = null;
     let isHourlyTableVisible = false;
     let lastPumpLoggedState = null;
@@ -2194,6 +2267,65 @@
       }
     }
 
+    function loadJournalEntries() {
+      try {
+        const raw = localStorage.getItem(JOURNAL_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+
+        if (!Array.isArray(parsed)) {
+          return [];
+        }
+
+        return parsed
+          .filter(function (item) {
+            return item && typeof item.ts === "number" && typeof item.date === "string" && typeof item.note === "string";
+          })
+          .sort(function (a, b) {
+            return b.ts - a.ts;
+          });
+      } catch (error) {
+        console.error("journal load failed:", error);
+        return [];
+      }
+    }
+
+    function saveJournalEntries() {
+      try {
+        localStorage.setItem(JOURNAL_KEY, JSON.stringify(journalEntries));
+      } catch (error) {
+        console.error("journal save failed:", error);
+      }
+    }
+
+    function renderJournalEntries() {
+      journalCount.textContent = `${journalEntries.length}개`;
+      journalLatest.textContent = journalEntries.length ? formatSavedDateTime(journalEntries[0].ts) : "--";
+      journalPreview.textContent = journalEntries.length
+        ? `${journalEntries[0].date} · ${journalEntries[0].title || "제목 없음"}`
+        : "최근 기록 없음";
+
+      if (!journalEntries.length) {
+        journalEmpty.classList.remove("is-hidden");
+        journalList.classList.add("is-hidden");
+        journalList.innerHTML = "";
+        return;
+      }
+
+      journalEmpty.classList.add("is-hidden");
+      journalList.classList.remove("is-hidden");
+      journalList.innerHTML = journalEntries.map(function (entry) {
+        return `
+          <div class="journal-item">
+            <div class="journal-item-head">
+              <div class="journal-item-title">${entry.title || "제목 없음"}</div>
+              <div class="journal-item-date">${entry.date} · ${formatSavedDateTime(entry.ts)}</div>
+            </div>
+            <div class="journal-item-note">${entry.note}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
     function renderEventLogs() {
       eventLogCount.textContent = `${eventLogs.length}개`;
       eventLogLatest.textContent = eventLogs.length ? formatSavedDateTime(eventLogs[0].ts) : "--";
@@ -2499,61 +2631,6 @@
     rememberLoginCheckbox.checked = Boolean(savedLogin);
     updateLoginSummary(savedLogin ? "저장됨" : "미저장");
     renderEventLogs();
-
-    /*
-      2. 차트 초기화
-      - labels: x축 시간 표시
-      - data: y축 토양 수분 값
-    */
-    const chartContext = document.getElementById("soilChart");
-    const soilChart = new Chart(chartContext, {
-      type: "line",
-      data: {
-        labels: [],
-        datasets: [
-          {
-            label: "Soil Moisture",
-            data: [],
-            borderColor: "#2d6a4f",
-            backgroundColor: "rgba(45, 106, 79, 0.16)",
-            borderWidth: 3,
-            fill: true,
-            tension: 0.3,
-            pointRadius: 4,
-            pointHoverRadius: 6
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        plugins: {
-          legend: {
-            display: true
-          }
-        },
-        scales: {
-          x: {
-            ticks: {
-              color: "#4e665a"
-            },
-            grid: {
-              color: "rgba(0, 0, 0, 0.05)"
-            }
-          },
-          y: {
-            beginAtZero: true,
-            ticks: {
-              color: "#4e665a"
-            },
-            grid: {
-              color: "rgba(0, 0, 0, 0.06)"
-            }
-          }
-        }
-      }
-    });
 
     const climateChartContext = document.getElementById("climateChart");
     const climateChart = new Chart(climateChartContext, {
@@ -3046,10 +3123,6 @@
           "timestamp",
           "date",
           "time",
-          "soil_raw",
-          "pump_state",
-          "led_state",
-          "co2_ppm",
           "ec_ms_cm",
           "ph",
           "temperature_c",
@@ -3067,10 +3140,6 @@
             minute: "2-digit",
             second: "2-digit"
           }),
-          formatCsvCell(entry.soil),
-          formatCsvCell(entry.pump),
-          formatCsvCell(entry.led),
-          formatCsvCell(entry.co2),
           formatCsvCell(entry.ec),
           formatCsvCell(entry.ph),
           formatCsvCell(entry.temp),
@@ -3085,7 +3154,7 @@
       const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
-      link.download = `smartfarm-sensor-history-${selectedDate}.csv`;
+      link.download = `smartfarm-env-history-${selectedDate}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -3304,20 +3373,6 @@
 
       refreshAlertUI();
       pushSensorHistoryPoint();
-
-      soilChart.data.labels.push(getTimeLabel());
-      soilChart.data.datasets[0].data.push(value);
-
-      /*
-        데이터가 MAX_POINTS를 넘으면 가장 오래된 데이터를 제거합니다.
-        이렇게 하면 최근 데이터만 유지할 수 있습니다.
-      */
-      if (soilChart.data.labels.length > MAX_POINTS) {
-        soilChart.data.labels.shift();
-        soilChart.data.datasets[0].data.shift();
-      }
-
-      soilChart.update();
     }
 
     /*
@@ -3568,12 +3623,6 @@
       ledOffBtn.disabled = !isConnected;
     }
 
-    function toggleTestButtons(isConnected) {
-      [soilDryTestBtn, soilWetTestBtn, co2TestBtn, ecTestBtn, phTestBtn, tempTestBtn, humidityTestBtn].forEach(function (button) {
-        button.disabled = !isConnected;
-      });
-    }
-
     /*
       연결 버튼도 연결 중일 때 잠시 비활성화합니다.
     */
@@ -3588,7 +3637,6 @@
       setConnectionState("Connected");
       setLoginHelp("연결되었습니다. 이제 센서 데이터가 들어오면 카드와 그래프가 함께 갱신됩니다.", "success");
       togglePumpButtons(true);
-      toggleTestButtons(true);
       addEventLog("브로커 연결 성공", "success", "connection:connected");
 
       client.subscribe(topics.soil, function (error) {
@@ -3654,7 +3702,6 @@
       setConnectionState("Connection Failed");
       setLoginHelp("연결에 실패했습니다. 현재 계정이 zionkoo3인지, 비밀번호가 그 계정용 비밀번호인지 다시 확인해보세요.", "error");
       togglePumpButtons(false);
-      toggleTestButtons(false);
       toggleConnectButton(false);
       addEventLog("브로커 연결 실패", "error", "connection:failed");
     }
@@ -3779,7 +3826,6 @@
         setConnectionState("Reconnecting...");
         setLoginHelp("연결이 잠시 끊겨 다시 연결을 시도하고 있습니다.", "");
         togglePumpButtons(false);
-        toggleTestButtons(false);
         toggleConnectButton(true);
         addEventLog("브로커 재연결 시도 중", "warning", "connection:reconnecting");
       });
@@ -3788,7 +3834,6 @@
         setConnectionState("Disconnected");
         setLoginHelp("연결이 끊어졌습니다. 비밀번호를 확인한 뒤 다시 연결해보세요.", "error");
         togglePumpButtons(false);
-        toggleTestButtons(false);
         toggleConnectButton(false);
         addEventLog("브로커 연결 끊김", "error", "connection:disconnected");
       });
@@ -3884,15 +3929,6 @@
       }
     }
 
-    function publishTestMessage(topic, value) {
-      if (!client || !client.connected) {
-        alert("먼저 MQTT 브로커에 연결해주세요.");
-        return;
-      }
-
-      client.publish(topic, String(value));
-    }
-
     pumpOnBtn.addEventListener("click", function () {
       publishPumpState("ON");
     });
@@ -3933,34 +3969,6 @@
       addEventLog("LED 예약 삭제", "success", "led-schedule:clear");
     });
 
-    soilDryTestBtn.addEventListener("click", function () {
-      publishTestMessage(topics.soil, 430);
-    });
-
-    soilWetTestBtn.addEventListener("click", function () {
-      publishTestMessage(topics.soil, 620);
-    });
-
-    co2TestBtn.addEventListener("click", function () {
-      publishTestMessage(topics.co2, 850);
-    });
-
-    ecTestBtn.addEventListener("click", function () {
-      publishTestMessage(topics.ec, 1.7);
-    });
-
-    phTestBtn.addEventListener("click", function () {
-      publishTestMessage(topics.ph, 5.8);
-    });
-
-    tempTestBtn.addEventListener("click", function () {
-      publishTestMessage(topics.temp, 23);
-    });
-
-    humidityTestBtn.addEventListener("click", function () {
-      publishTestMessage(topics.humidity, 55);
-    });
-
     connectBtn.addEventListener("click", function () {
       connectMQTT();
     });
@@ -3998,6 +4006,38 @@
       eventLogs = [];
       saveEventLogs();
       renderEventLogs();
+    });
+
+    saveJournalBtn.addEventListener("click", function () {
+      const date = journalDateInput.value || getLocalDateKey(Date.now());
+      const title = journalTitleInput.value.trim();
+      const note = journalNoteInput.value.trim();
+
+      if (!note) {
+        alert("재배일지 메모를 입력해주세요.");
+        return;
+      }
+
+      journalEntries.unshift({
+        ts: Date.now(),
+        date,
+        title,
+        note
+      });
+
+      journalEntries = journalEntries.slice(0, 100);
+      saveJournalEntries();
+      renderJournalEntries();
+      addEventLog(`재배일지 저장 · ${title || "메모 기록"}`, "info", `journal:${date}:${title}:${note.slice(0, 24)}`);
+      journalTitleInput.value = "";
+      journalNoteInput.value = "";
+    });
+
+    clearJournalBtn.addEventListener("click", function () {
+      journalEntries = [];
+      saveJournalEntries();
+      renderJournalEntries();
+      addEventLog("재배일지 전체 삭제", "warning", "journal:clear");
     });
 
     climateDateInput.addEventListener("change", function () {
@@ -4057,10 +4097,10 @@
       첫 로딩 시 기본 상태
     */
     togglePumpButtons(false);
-    toggleTestButtons(false);
     toggleConnectButton(false);
     updateDateTimeCards();
     requestOutsideWeather();
+    journalDateInput.value = getLocalDateKey(Date.now());
     updateFreshnessUI("soil");
     updateFreshnessUI("pump");
     updateFreshnessUI("led");
@@ -4073,6 +4113,7 @@
     setHourlyTableVisibility(false);
     refreshAlertUI();
     renderClimateHistory();
+    renderJournalEntries();
     updateLedScheduleSummary();
     updateActiveMobileNav();
     window.addEventListener("scroll", updateActiveMobileNav, { passive: true });
