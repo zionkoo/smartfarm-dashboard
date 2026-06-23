@@ -864,6 +864,41 @@
       color: var(--text-soft);
     }
 
+    .admin-feedback {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(23, 59, 45, 0.08);
+      background: linear-gradient(135deg, #f3f8ee, #ffffff);
+      color: var(--text-soft);
+      font-size: 0.94rem;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .admin-feedback.success {
+      border-color: rgba(47, 158, 68, 0.22);
+      background: linear-gradient(135deg, rgba(63, 168, 77, 0.12), rgba(255, 255, 255, 0.96));
+      color: #1f6d35;
+    }
+
+    .admin-feedback.error {
+      border-color: rgba(214, 69, 69, 0.24);
+      background: linear-gradient(135deg, rgba(226, 104, 104, 0.12), rgba(255, 255, 255, 0.96));
+      color: #a03a3a;
+    }
+
+    .admin-feedback.info {
+      border-color: rgba(232, 170, 34, 0.2);
+      background: linear-gradient(135deg, rgba(240, 211, 90, 0.14), rgba(255, 255, 255, 0.96));
+      color: #7d5c10;
+    }
+
+    .locked-section {
+      opacity: 0.72;
+      transition: opacity 0.2s ease;
+    }
+
     .history-summary {
       display: flex;
       flex-wrap: wrap;
@@ -1424,10 +1459,11 @@
           <button class="btn-connect" id="unlockAdminBtn" type="button">잠금 해제 요청</button>
           <button class="btn-clear" id="lockAdminBtn" type="button">다시 잠그기</button>
         </div>
+        <div class="admin-feedback info" id="adminModeNotice">관리자 인증 전에는 운영 모드 변경, 펌프/LED 제어, LED 예약 저장이 잠깁니다.</div>
         <p class="meta" id="adminModeSummary">제어 버튼, 예약 저장, 운영 모드 변경은 Node-RED 관리자 인증 후에만 가능합니다.</p>
       </article>
 
-      <article class="card control-card">
+      <article class="card control-card" id="systemModeCard">
         <h2 class="card-title">운영 모드</h2>
         <div class="mode-state" id="systemModeValue">수동 모드</div>
         <div class="status-badge wet" id="systemModeStatus">직접 제어 가능</div>
@@ -1953,9 +1989,11 @@
     const adminModeStatus = document.getElementById("adminModeStatus");
     const adminModeUpdatedAt = document.getElementById("adminModeUpdatedAt");
     const adminModeSummary = document.getElementById("adminModeSummary");
+    const adminModeNotice = document.getElementById("adminModeNotice");
     const adminPasswordInput = document.getElementById("adminPasswordInput");
     const unlockAdminBtn = document.getElementById("unlockAdminBtn");
     const lockAdminBtn = document.getElementById("lockAdminBtn");
+    const systemModeCard = document.getElementById("systemModeCard");
     const systemModeValue = document.getElementById("systemModeValue");
     const systemModeStatus = document.getElementById("systemModeStatus");
     const systemModeUpdatedAt = document.getElementById("systemModeUpdatedAt");
@@ -1969,6 +2007,7 @@
     const ledOffBtn = document.getElementById("ledOffBtn");
     const ledOnTimeInput = document.getElementById("ledOnTimeInput");
     const ledOffTimeInput = document.getElementById("ledOffTimeInput");
+    const ledScheduleSection = document.getElementById("ledScheduleSection");
     const ledScheduleDayInputs = Array.from(document.querySelectorAll("[data-led-day]"));
     const saveLedScheduleBtn = document.getElementById("saveLedScheduleBtn");
     const clearLedScheduleBtn = document.getElementById("clearLedScheduleBtn");
@@ -2095,6 +2134,7 @@
     let systemMode = loadSystemMode();
     let adminSession = loadAdminSession();
     let adminAuthPending = false;
+    let adminFeedbackOverride = null;
 
     function hasAnyRecentSensorData() {
       return Object.values(lastSeenAt).some(Boolean);
@@ -2414,8 +2454,44 @@
       return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
     }
 
+    function setAdminFeedback(message, type, persistMs) {
+      if (persistMs) {
+        adminFeedbackOverride = {
+          message,
+          type: type || "info",
+          expiresAt: Date.now() + persistMs
+        };
+      } else {
+        adminFeedbackOverride = null;
+      }
+
+      adminModeNotice.textContent = message;
+      adminModeNotice.className = `admin-feedback ${type || "info"}`;
+    }
+
+    function updateAdminRestrictedUI() {
+      const unlocked = isAdminUnlocked();
+
+      [autoModeBtn, manualModeBtn, maintenanceModeBtn].forEach(function (button) {
+        button.disabled = !unlocked;
+      });
+
+      ledOnTimeInput.disabled = !unlocked;
+      ledOffTimeInput.disabled = !unlocked;
+      saveLedScheduleBtn.disabled = !unlocked;
+      clearLedScheduleBtn.disabled = !unlocked;
+
+      ledScheduleDayInputs.forEach(function (input) {
+        input.disabled = !unlocked;
+      });
+
+      systemModeCard.classList.toggle("locked-section", !unlocked);
+      ledScheduleSection.classList.toggle("locked-section", !unlocked);
+    }
+
     function updateAdminModeUI() {
       const unlocked = isAdminUnlocked();
+      const hasFeedbackOverride = adminFeedbackOverride && adminFeedbackOverride.expiresAt > Date.now();
 
       if (unlocked) {
         adminModeValue.textContent = "관리자 해제";
@@ -2425,6 +2501,13 @@
         adminModeSummary.textContent = "현재 관리자 제어가 허용된 상태입니다. 중요한 작업이 끝나면 다시 잠그는 것을 권장합니다.";
         unlockAdminBtn.textContent = "잠금 연장";
         lockAdminBtn.disabled = false;
+        if (hasFeedbackOverride) {
+          adminModeNotice.textContent = adminFeedbackOverride.message;
+          adminModeNotice.className = `admin-feedback ${adminFeedbackOverride.type}`;
+        } else {
+          setAdminFeedback("관리자 인증이 완료되어 제어와 예약 저장을 사용할 수 있습니다.", "success");
+        }
+        updateAdminRestrictedUI();
         return;
       }
 
@@ -2439,10 +2522,22 @@
         ? "잠시만 기다려주세요. 인증 응답이 오면 바로 제어 가능 상태로 바뀝니다."
         : "제어 버튼, 예약 저장, 운영 모드 변경은 Node-RED 관리자 인증 후에만 가능합니다.";
       unlockAdminBtn.textContent = adminAuthPending ? "인증 요청 중..." : "잠금 해제 요청";
+
+      if (hasFeedbackOverride) {
+        adminModeNotice.textContent = adminFeedbackOverride.message;
+        adminModeNotice.className = `admin-feedback ${adminFeedbackOverride.type}`;
+      } else if (adminAuthPending) {
+        setAdminFeedback("Node-RED가 비밀번호를 확인 중입니다. 잠시만 기다려주세요.", "info");
+      } else {
+        setAdminFeedback("관리자 인증 전에는 운영 모드 변경, 펌프/LED 제어, LED 예약 저장이 잠깁니다.", "info");
+      }
+
+      updateAdminRestrictedUI();
     }
 
     function lockAdminMode(logIt) {
       adminAuthPending = false;
+      adminFeedbackOverride = null;
       adminSession = {
         unlocked: false,
         expiresAt: null
@@ -2515,6 +2610,7 @@
         };
         saveAdminSession();
         adminPasswordInput.value = "";
+        setAdminFeedback("관리자 인증 성공. 지금부터 제어와 예약 저장을 사용할 수 있습니다.", "success", 5000);
         updateAdminModeUI();
         togglePumpButtons(true);
         addEventLog("관리자 모드 잠금 해제", "success", `admin:unlock:${adminSession.expiresAt}`);
@@ -2528,6 +2624,7 @@
       saveAdminSession();
       updateAdminModeUI();
       togglePumpButtons(Boolean(client && client.connected));
+      setAdminFeedback(payload.message || "관리자 비밀번호가 일치하지 않습니다.", "error", 5000);
       alert(payload.message || "관리자 비밀번호가 일치하지 않습니다.");
       addEventLog("관리자 인증 실패", "warning", `admin:failed:${mqttConfig.clientId}`);
     }
@@ -4238,7 +4335,7 @@
       버튼은 연결되었을 때만 누를 수 있게 합니다.
     */
     function togglePumpButtons(isConnected) {
-      const allowManualControl = isConnected && systemMode.mode === "manual";
+      const allowManualControl = isConnected && systemMode.mode === "manual" && isAdminUnlocked();
       pumpOnBtn.disabled = !allowManualControl;
       pumpOffBtn.disabled = !allowManualControl;
       ledOnBtn.disabled = !allowManualControl;
