@@ -1417,14 +1417,14 @@
         <div class="history-toolbar">
           <div class="field field-wide">
             <label for="adminPasswordInput">관리자 비밀번호</label>
-            <input id="adminPasswordInput" type="password" placeholder="처음이면 비밀번호를 설정하고, 이후에는 입력 후 잠금 해제" />
+            <input id="adminPasswordInput" type="password" placeholder="Node-RED에 설정한 관리자 비밀번호를 입력하세요" />
           </div>
         </div>
         <div class="controls">
-          <button class="btn-connect" id="unlockAdminBtn" type="button">잠금 해제 / 설정</button>
+          <button class="btn-connect" id="unlockAdminBtn" type="button">잠금 해제 요청</button>
           <button class="btn-clear" id="lockAdminBtn" type="button">다시 잠그기</button>
         </div>
-        <p class="meta" id="adminModeSummary">제어 버튼, 예약 저장, 운영 모드 변경은 관리자 잠금 해제 후에만 가능합니다.</p>
+        <p class="meta" id="adminModeSummary">제어 버튼, 예약 저장, 운영 모드 변경은 Node-RED 관리자 인증 후에만 가능합니다.</p>
       </article>
 
       <article class="card control-card">
@@ -1889,7 +1889,9 @@
       ph: "farm/ph",
       temp: "farm/temp",
       humidity: "farm/humidity",
-      history: "farm/history/#"
+      history: "farm/history/#",
+      adminAuthRequest: "farm/admin/auth/request",
+      adminAuthResponse: "farm/admin/auth/response"
     };
 
     /*
@@ -2038,7 +2040,6 @@
     const EVENT_LOG_KEY = "smartfarm-dashboard-event-log";
     const JOURNAL_KEY = "smartfarm-dashboard-journal";
     const SYSTEM_MODE_KEY = "smartfarm-dashboard-system-mode";
-    const ADMIN_PASSWORD_KEY = "smartfarm-dashboard-admin-password";
     const ADMIN_SESSION_KEY = "smartfarm-dashboard-admin-session";
     const ADMIN_SESSION_DURATION_MS = 10 * 60 * 1000;
     const LED_SCHEDULE_DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -2093,6 +2094,7 @@
     let ledSchedule = loadLedSchedule();
     let systemMode = loadSystemMode();
     let adminSession = loadAdminSession();
+    let adminAuthPending = false;
 
     function hasAnyRecentSensorData() {
       return Object.values(lastSeenAt).some(Boolean);
@@ -2365,24 +2367,6 @@
       }
     }
 
-    function loadAdminPassword() {
-      try {
-        const raw = localStorage.getItem(ADMIN_PASSWORD_KEY);
-        return typeof raw === "string" ? raw : "";
-      } catch (error) {
-        console.error("admin password load failed:", error);
-        return "";
-      }
-    }
-
-    function saveAdminPassword(password) {
-      try {
-        localStorage.setItem(ADMIN_PASSWORD_KEY, password);
-      } catch (error) {
-        console.error("admin password save failed:", error);
-      }
-    }
-
     function loadAdminSession() {
       try {
         const raw = localStorage.getItem(ADMIN_SESSION_KEY);
@@ -2431,21 +2415,7 @@
     }
 
     function updateAdminModeUI() {
-      const savedPassword = loadAdminPassword();
       const unlocked = isAdminUnlocked();
-
-      if (!savedPassword) {
-        adminModeValue.textContent = "초기 설정 필요";
-        adminModeStatus.textContent = "비밀번호 미설정";
-        adminModeStatus.className = "status-badge waiting";
-        adminModeUpdatedAt.textContent = "잠금 상태: 비밀번호를 먼저 설정해주세요";
-        adminModeSummary.textContent = "처음 한 번 관리자 비밀번호를 설정하면, 이후 제어 작업 전 잠금 해제가 필요합니다.";
-        unlockAdminBtn.textContent = "비밀번호 설정";
-        lockAdminBtn.disabled = true;
-        return;
-      }
-
-      lockAdminBtn.disabled = !unlocked;
 
       if (unlocked) {
         adminModeValue.textContent = "관리자 해제";
@@ -2454,18 +2424,25 @@
         adminModeUpdatedAt.textContent = `잠금 해제 유지: ${formatRemainingTime(adminSession.expiresAt - Date.now())}`;
         adminModeSummary.textContent = "현재 관리자 제어가 허용된 상태입니다. 중요한 작업이 끝나면 다시 잠그는 것을 권장합니다.";
         unlockAdminBtn.textContent = "잠금 연장";
+        lockAdminBtn.disabled = false;
         return;
       }
 
+      lockAdminBtn.disabled = true;
       adminModeValue.textContent = "잠금 상태";
-      adminModeStatus.textContent = "제어 잠금";
-      adminModeStatus.className = "status-badge caution";
-      adminModeUpdatedAt.textContent = "잠금 유지: 관리자 확인 필요";
-      adminModeSummary.textContent = "제어 버튼, 예약 저장, 운영 모드 변경은 관리자 잠금 해제 후에만 가능합니다.";
-      unlockAdminBtn.textContent = "잠금 해제";
+      adminModeStatus.textContent = adminAuthPending ? "인증 확인 중" : "제어 잠금";
+      adminModeStatus.className = adminAuthPending ? "status-badge waiting" : "status-badge caution";
+      adminModeUpdatedAt.textContent = adminAuthPending
+        ? "Node-RED가 관리자 인증을 확인하고 있습니다"
+        : "잠금 유지: 관리자 확인 필요";
+      adminModeSummary.textContent = adminAuthPending
+        ? "잠시만 기다려주세요. 인증 응답이 오면 바로 제어 가능 상태로 바뀝니다."
+        : "제어 버튼, 예약 저장, 운영 모드 변경은 Node-RED 관리자 인증 후에만 가능합니다.";
+      unlockAdminBtn.textContent = adminAuthPending ? "인증 요청 중..." : "잠금 해제 요청";
     }
 
     function lockAdminMode(logIt) {
+      adminAuthPending = false;
       adminSession = {
         unlocked: false,
         expiresAt: null
@@ -2480,41 +2457,27 @@
 
     function unlockAdminMode() {
       const passwordText = adminPasswordInput.value.trim();
-      const savedPassword = loadAdminPassword();
 
       if (!passwordText) {
-        alert(savedPassword ? "관리자 비밀번호를 입력해주세요." : "새 관리자 비밀번호를 먼저 입력해주세요.");
+        alert("관리자 비밀번호를 입력해주세요.");
         return;
       }
 
-      if (!savedPassword) {
-        saveAdminPassword(passwordText);
-        adminSession = {
-          unlocked: true,
-          expiresAt: Date.now() + ADMIN_SESSION_DURATION_MS
-        };
-        saveAdminSession();
-        adminPasswordInput.value = "";
-        updateAdminModeUI();
-        togglePumpButtons(Boolean(client && client.connected));
-        addEventLog("관리자 비밀번호 설정 및 잠금 해제", "success", "admin:setup");
+      if (!client || !client.connected) {
+        alert("먼저 MQTT 브로커에 연결해주세요.");
         return;
       }
 
-      if (passwordText !== savedPassword) {
-        alert("관리자 비밀번호가 일치하지 않습니다.");
-        return;
-      }
-
-      adminSession = {
-        unlocked: true,
-        expiresAt: Date.now() + ADMIN_SESSION_DURATION_MS
-      };
-      saveAdminSession();
-      adminPasswordInput.value = "";
+      adminAuthPending = true;
       updateAdminModeUI();
-      togglePumpButtons(Boolean(client && client.connected));
-      addEventLog("관리자 모드 잠금 해제", "success", `admin:unlock:${adminSession.expiresAt}`);
+      togglePumpButtons(false);
+
+      client.publish(topics.adminAuthRequest, JSON.stringify({
+        clientId: mqttConfig.clientId,
+        password: passwordText
+      }));
+
+      addEventLog("관리자 인증 요청 전송", "info", `admin:request:${mqttConfig.clientId}`);
     }
 
     function requireAdminAccess() {
@@ -2526,6 +2489,47 @@
       }
 
       return true;
+    }
+
+    function handleAdminAuthResponse(message) {
+      let payload = null;
+
+      try {
+        payload = JSON.parse(message);
+      } catch (error) {
+        console.error("admin auth payload parse failed:", error);
+        return;
+      }
+
+      if (!payload || payload.clientId !== mqttConfig.clientId) {
+        return;
+      }
+
+      adminAuthPending = false;
+
+      if (payload.ok) {
+        const expiresAt = Number(payload.expiresAt);
+        adminSession = {
+          unlocked: true,
+          expiresAt: Number.isFinite(expiresAt) ? expiresAt : Date.now() + ADMIN_SESSION_DURATION_MS
+        };
+        saveAdminSession();
+        adminPasswordInput.value = "";
+        updateAdminModeUI();
+        togglePumpButtons(true);
+        addEventLog("관리자 모드 잠금 해제", "success", `admin:unlock:${adminSession.expiresAt}`);
+        return;
+      }
+
+      adminSession = {
+        unlocked: false,
+        expiresAt: null
+      };
+      saveAdminSession();
+      updateAdminModeUI();
+      togglePumpButtons(Boolean(client && client.connected));
+      alert(payload.message || "관리자 비밀번호가 일치하지 않습니다.");
+      addEventLog("관리자 인증 실패", "warning", `admin:failed:${mqttConfig.clientId}`);
     }
 
     function saveSystemMode() {
@@ -4310,12 +4314,20 @@
           console.error("history topic subscribe failed:", error);
         }
       });
+
+      client.subscribe(topics.adminAuthResponse, function (error) {
+        if (error) {
+          console.error("admin auth response subscribe failed:", error);
+        }
+      });
     }
 
     /*
       연결 실패 시 상태를 표시합니다.
     */
     function onFailure(error) {
+      adminAuthPending = false;
+      updateAdminModeUI();
       console.error("MQTT connection failed:", error);
       setConnectionState("Connection Failed");
       setLoginHelp("연결에 실패했습니다. 현재 계정이 zionkoo3인지, 비밀번호가 그 계정용 비밀번호인지 다시 확인해보세요.", "error");
@@ -4425,6 +4437,10 @@
           updateHumidityUI(message);
         }
 
+        if (topic === topics.adminAuthResponse) {
+          handleAdminAuthResponse(message);
+        }
+
         if (topic.startsWith("farm/history/")) {
           try {
             const parsed = JSON.parse(message);
@@ -4449,6 +4465,8 @@
       });
 
       client.on("close", function () {
+        adminAuthPending = false;
+        updateAdminModeUI();
         setConnectionState("Disconnected");
         setLoginHelp("연결이 끊어졌습니다. 비밀번호를 확인한 뒤 다시 연결해보세요.", "error");
         togglePumpButtons(false);
